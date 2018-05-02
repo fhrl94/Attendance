@@ -1,0 +1,27 @@
+<!--参考删除模板 model_delete_selected_confirm.html 从content中切入-->
+{% extends base_template %}
+<!-- 'xadmin/base.html' -->
+{% load i18n l10n %}
+
+{% load xadmin_tags %}
+
+{% block breadcrumbs %}
+<ul class="breadcrumb">
+<li><a href="{% url 'xadmin:index' %}">{% trans 'Home' %}</a></li>
+<li><a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a></li>
+<!--<li>{% trans 'Delete multiple objects' %}</li>-->
+</ul>
+{% endblock %}
+{% block nav_title %}{{title}}{% endblock %}
+
+{% block content %}
+<form method="post" role="form">
+    {% csrf_token %}
+    {% for field in form %}
+        {{field.label}}
+        {{field}}
+    {% endfor %}
+    </br>
+    <input type="submit" value="提交" class="btn btn-primary" id="commit"/>
+</form>
+{% endblock %}
