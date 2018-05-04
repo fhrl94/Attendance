@@ -217,13 +217,11 @@ class EditAttendance(models.Model):
 
 class LeaveType(AttendanceExceptionStatus):
 
-    leave_type_choice = (('0', '非带薪假'), ('1', '带薪假'))
-    legal_include_choice = (('0', '否'), ('1', '是'))
 
     # 表的结构:
     # name = models.CharField('请假原因', max_length=20, unique=True)
-    leave_type = models.CharField('是否带薪假', max_length=2, choices=leave_type_choice)
-    legal_include = models.CharField('是否含法定节假日', max_length=2, choices=legal_include_choice)
+    leave_type = models.BooleanField('是否带薪假')
+    legal_include = models.BooleanField('是否含法定节假日')
     # leave_status = models.CharField('假期状态', max_length=2, choices=status_choice)
     # leave_type_code = models.CharField('异常编码', max_length=2, unique=True)
     # operate = models.DateTimeField('请假类型操作日期', auto_now=True)
@@ -279,8 +277,8 @@ class LeaveDetail(models.Model):
 
     emp = models.ForeignKey(EmployeeInfo, to_field='code', on_delete=models.CASCADE, verbose_name='工号')
     leave_date = models.DateField('请假日期')
-    leave_detail_time_start = models.TimeField('上午请假时间')
-    leave_detail_time_end = models.TimeField('下午请假时间')
+    leave_detail_time_start = models.TimeField('上午请假时间', null=True, blank=True)
+    leave_detail_time_end = models.TimeField('下午请假时间', null=True, blank=True)
     leave_type = models.ForeignKey(LeaveType, to_field='exception_name', on_delete=models.CASCADE, verbose_name='假期类型')
     leave_info_status = models.CharField('假期单据状态', max_length=2, choices=status_choice)
     leave_detail_operate = models.DateTimeField('假期明细操作日期', auto_now=True)
@@ -316,8 +314,10 @@ class AttendanceInfo(models.Model):
                                         verbose_name='上午考勤状态', related_name='check_in_status')
     check_out_status = models.ForeignKey(AttendanceExceptionStatus, to_field='exception_name', on_delete=models.CASCADE,
                                          verbose_name='下午考勤状态', related_name='check_out_status')
-    check_status = models.ForeignKey(AttendanceExceptionStatus, to_field='exception_name', on_delete=models.CASCADE,
-                                         verbose_name='当天考勤状态', related_name='check_status')
+    check_status = models.BooleanField('是否异常')
+    attendance_date_status = models.BooleanField('是否工作日')
+    # check_status = models.ForeignKey(AttendanceExceptionStatus, to_field='exception_name', on_delete=models.CASCADE,
+    #                                      verbose_name='当天考勤状态', related_name='check_status')
 
     def __str__(self):
         return str(self.emp)
