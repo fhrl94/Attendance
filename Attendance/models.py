@@ -2,13 +2,12 @@ import sys
 
 import datetime
 from django.core.validators import RegexValidator
-from django.db import models
+from django.db import models, IntegrityError
 
 # Create your models here.
-from django.db.models import Q
-
 
 status_choice = (('0', '未使用'), ('1', '使用中'), ('2', '已失效'))
+
 
 # 人员信息
 
@@ -17,8 +16,8 @@ def user_directory_path(instance, filename):
     return '{upload_to}/{filename}_{time}'.format(upload_to=sys.path[0] + '/upload/', filename=filename,
                                                   time=datetime.datetime.today().strftime('%Y_%m_%d_%H_%M_%S'))
 
-class EmployeeInfo(models.Model):
 
+class EmployeeInfo(models.Model):
     # emp_status_choice = (('0', '已离职'), ('1', '在职'), ('2', '试用'), ('3', '实习'))
 
     # 表的结构:
@@ -26,8 +25,7 @@ class EmployeeInfo(models.Model):
     code = models.CharField('工号', max_length=10, validators=[RegexValidator(r'^[\d]{10}')], unique=True)
     # TODO 排班时，需要做筛选
     level = models.CharField('级别', max_length=10, )
-    emp_status = models.CharField('员工状态', max_length=4,)
-
+    emp_status = models.CharField('员工状态', max_length=4, )
 
     def __str__(self):
         return self.name
@@ -36,8 +34,8 @@ class EmployeeInfo(models.Model):
         verbose_name = '员工基础信息'
         verbose_name_plural = verbose_name
 
-class EmployeeInfoImport(models.Model):
 
+class EmployeeInfoImport(models.Model):
     # 表的结构:
     # path_name = models.FileField('文件名称', upload_to=sys.path[0] + '/upload/%Y_%m_%d/%H', )
     path_name = models.FileField('文件名称', upload_to=user_directory_path, )
@@ -51,6 +49,7 @@ class EmployeeInfoImport(models.Model):
         verbose_name = '人员信息导入'
         verbose_name_plural = verbose_name
 
+
 # 考勤原始数据导入存储
 class OriginalCard(models.Model):
     emp = models.ForeignKey(EmployeeInfo, to_field='code', on_delete=models.CASCADE, verbose_name='工号')
@@ -63,9 +62,9 @@ class OriginalCard(models.Model):
         verbose_name = '原始打卡记录'
         verbose_name_plural = verbose_name
 
+
 #  考勤数据上传、导入
 class OriginalCardImport(models.Model):
-
     # 表的结构:
     # path_name = models.FileField('文件名称', upload_to=sys.path[0] + '/upload/%Y_%m_%d/%H', )
     path_name = models.FileField('文件名称', upload_to=user_directory_path, )
@@ -79,16 +78,16 @@ class OriginalCardImport(models.Model):
         verbose_name = '原始考勤数据导入'
         verbose_name_plural = verbose_name
 
+
 # 班次
 # TODO 排班规则
 class ShiftsInfo(models.Model):
-
-    type_shift_choice = (('0', '节假日'), ('1', '工作日'))
+    # type_shift_choice = (('0', '节假日'), ('1', '工作日'))
     # TODO 在admin的删除动作中实现标记为失效
     # TODO 初始表中应该生成 节假日班次
     # 表的结构:
     name = models.CharField('班次名称', max_length=20, unique=True)
-    type_shift = models.CharField('班次类型', max_length=2, choices=type_shift_choice)
+    type_shift = models.BooleanField('是否工作日', )
     check_in = models.TimeField('上午上班时间', null=True)
     check_in_end = models.TimeField('上午打卡截止时间', null=True)
     check_out_start = models.TimeField('下午下班开始时间', null=True)
@@ -107,9 +106,7 @@ class ShiftsInfo(models.Model):
         verbose_name_plural = verbose_name
 
 
-
 class LegalHoliday(models.Model):
-
     legal_holiday_name = models.CharField('法定节假日名称', max_length=20, unique=True)
     legal_holiday = models.DateField('法定节假日', unique=True)
     operate = models.DateTimeField('操作时间', auto_now=True)
@@ -124,15 +121,14 @@ class LegalHoliday(models.Model):
 
     pass
 
+
 # 考勤排班（时间、班次、人员）
 class EmployeeSchedulingInfo(models.Model):
-
-
     # 表的结构:
     emp = models.ForeignKey(EmployeeInfo, to_field='code', on_delete=models.CASCADE, verbose_name='工号')
-    attendance_date = models.DateField('排班日期',)
+    attendance_date = models.DateField('排班日期', )
     shifts_name = models.ForeignKey(ShiftsInfo, to_field='name', on_delete=models.CASCADE, verbose_name='班次名称')
-    shifts_verbose_name = models.CharField('排班名称', max_length=20,)
+    shifts_verbose_name = models.CharField('排班名称', max_length=20, )
     operate = models.DateTimeField('排班操作日期', auto_now=True)
 
     def __str__(self):
@@ -142,6 +138,7 @@ class EmployeeSchedulingInfo(models.Model):
         verbose_name = '人员排班信息'
         verbose_name_plural = verbose_name
         unique_together = ('emp', 'attendance_date')
+
 
 # 查看考勤及异常
 class AttendanceExceptionStatus(models.Model):
@@ -156,6 +153,7 @@ class AttendanceExceptionStatus(models.Model):
     class Meta:
         verbose_name = '考勤状态'
         verbose_name_plural = verbose_name
+
 
 # 4. 签卡(签卡类型）
 
@@ -179,6 +177,7 @@ class EditAttendanceType(AttendanceExceptionStatus):
         verbose_name = '签卡原因'
         verbose_name_plural = verbose_name
 
+
 class EditAttendance(models.Model):
     emp = models.ForeignKey(EmployeeInfo, to_field='code', on_delete=models.CASCADE, verbose_name='工号')
     edit_attendance_date = models.DateField('签卡日期')
@@ -187,8 +186,7 @@ class EditAttendance(models.Model):
     edit_attendance_time_end = models.TimeField('下午签卡时间', null=True, blank=True)
     edit_attendance_type = models.ForeignKey(EditAttendanceType, on_delete=models.CASCADE,
                                              to_field='attendanceexceptionstatus_ptr',
-                                             limit_choices_to={'exception_status': '1'},
-                                             verbose_name='签卡原因')
+                                             limit_choices_to={'exception_status': '1'}, verbose_name='签卡原因')
     #  单据状态
     edit_attendance_status = models.CharField('签卡单据状态', max_length=2, choices=status_choice)
     edit_attendance_operate = models.DateTimeField('操作日期', auto_now=True)
@@ -197,31 +195,24 @@ class EditAttendance(models.Model):
         return str(self.emp)
 
     def save(self, *args, **kwargs):
-        question = Q(emp=self.emp) & Q(attendance_date=self.edit_attendance_date)
-        attendance_ins = AttendanceInfo.objects.filter(question).get()
-        if self.edit_attendance_time_start != None:
-            attendance_ins.check_in = self.edit_attendance_time_start
-            attendance_ins.check_in_status = AttendanceExceptionStatus.objects.get(exception_name=self.edit_attendance_type)
-        if self.edit_attendance_time_end != None:
-            attendance_ins.check_out = self.edit_attendance_time_end
-            attendance_ins.check_out_status = AttendanceExceptionStatus.objects.get(exception_name=self.edit_attendance_type)
-        attendance_ins.save()
-        super(EditAttendance, self).save(*args, **kwargs) # Call the "real" save() method.
+        super(EditAttendance, self).save(*args, **kwargs)  # Call the "real" save() method.
+        from Attendance.views import attendance_cal
+        attendance_cal((self.emp,), self.edit_attendance_date, self.edit_attendance_date)
 
     class Meta:
         verbose_name = '签卡信息'
         verbose_name_plural = verbose_name
-        unique_together = ('emp', 'edit_attendance_date',)
+        unique_together = ('emp', 'edit_attendance_date', 'edit_attendance_status')
+
 
 # 5. 请假（请假单、请假拆分）
 
 class LeaveType(AttendanceExceptionStatus):
-
-
     # 表的结构:
     # name = models.CharField('请假原因', max_length=20, unique=True)
     leave_type = models.BooleanField('是否带薪假')
     legal_include = models.BooleanField('是否含法定节假日')
+
     # leave_status = models.CharField('假期状态', max_length=2, choices=status_choice)
     # leave_type_code = models.CharField('异常编码', max_length=2, unique=True)
     # operate = models.DateTimeField('请假类型操作日期', auto_now=True)
@@ -242,18 +233,14 @@ class LeaveType(AttendanceExceptionStatus):
 # TODO 假期额度限制
 
 class LeaveInfo(models.Model):
-
-
     # 表的结构:
     emp = models.ForeignKey(EmployeeInfo, to_field='code', on_delete=models.CASCADE, verbose_name='工号')
     start_date = models.DateField('开始日期')
     leave_info_time_start = models.TimeField('开始请假时间', )
     end_date = models.DateField('结束日期')
     leave_info_time_end = models.TimeField('结束请假时间', )
-    leave_type = models.ForeignKey(LeaveType, on_delete=models.CASCADE,
-                                             to_field='attendanceexceptionstatus_ptr',
-                                             limit_choices_to={'exception_status': '1'},
-                                             verbose_name='假期类型')
+    leave_type = models.ForeignKey(LeaveType, on_delete=models.CASCADE, to_field='attendanceexceptionstatus_ptr',
+                                   limit_choices_to={'exception_status': '1'}, verbose_name='假期类型')
     leave_info_status = models.CharField('假期单据状态', max_length=2, choices=status_choice)
     # TODO 审批人
     leave_info_operate = models.DateTimeField('假期操作日期', auto_now=True)
@@ -262,20 +249,26 @@ class LeaveInfo(models.Model):
         return str(self.emp)
 
     def save(self, *args, **kwargs):
-        # TODO
-
-        if self.start_date - self.end_date == 0:
-            pass
-
-        super(LeaveInfo, self).save(*args, **kwargs) # Call the "real" save() method.
+        #
+        if self.start_date >= self.end_date:
+            try:
+                super(LeaveInfo, self).save(*args, **kwargs)  # Call the "real" save() method.
+                from Attendance.views import attendance_cal
+                attendance_cal((self.emp,), self.start_date, self.end_date)
+            except IntegrityError:
+                raise UserWarning('无效')
+                pass
+        else:
+            raise UserWarning('开始日期必须要大于结束日期')
 
     class Meta:
         verbose_name = '请假信息'
         verbose_name_plural = verbose_name
 
-class LeaveDetail(models.Model):
 
+class LeaveDetail(models.Model):
     emp = models.ForeignKey(EmployeeInfo, to_field='code', on_delete=models.CASCADE, verbose_name='工号')
+    leave_info_id = models.ForeignKey(LeaveInfo, to_field='id', on_delete=models.CASCADE, verbose_name='单据主键')
     leave_date = models.DateField('请假日期')
     leave_detail_time_start = models.TimeField('上午请假时间', null=True, blank=True)
     leave_detail_time_end = models.TimeField('下午请假时间', null=True, blank=True)
@@ -289,12 +282,13 @@ class LeaveDetail(models.Model):
     class Meta:
         verbose_name = '假期明细'
         verbose_name_plural = verbose_name
+        unique_together = ('emp', 'leave_date', 'leave_info_status')
 
     pass
 
+
 # TODO 出差
 class TravelingType(AttendanceExceptionStatus):
-
     class Meta:
         verbose_name = '出差原因'
         verbose_name_plural = verbose_name
@@ -306,25 +300,26 @@ class AttendanceInfo(models.Model):
     #                     ('02', '年假'), ('03', '病假'), ('04', '法定节假日'), ('05', '婚假'), ('06', '丧假'),
     #                     ('07', '陪产假'), ('08', '工伤假'),('21', '事假'), ('22', '产假')), ('99', '异常')
 
+    check_status_choice = (('0', '正常'), ('1', '迟到'), ('2', '早退'), ('3', '旷工'))
+
     emp = models.ForeignKey(EmployeeInfo, to_field='code', on_delete=models.CASCADE, verbose_name='工号')
     attendance_date = models.DateField('考勤日期')
     check_in = models.TimeField('上班时间', null=True)
     check_out = models.TimeField('下班时间', null=True)
-    check_in_status = models.ForeignKey(AttendanceExceptionStatus, to_field='exception_name', on_delete=models.CASCADE,
-                                        verbose_name='上午考勤状态', related_name='check_in_status')
-    check_out_status = models.ForeignKey(AttendanceExceptionStatus, to_field='exception_name', on_delete=models.CASCADE,
-                                         verbose_name='下午考勤状态', related_name='check_out_status')
+    check_in_type = models.ForeignKey(AttendanceExceptionStatus, to_field='exception_name', on_delete=models.CASCADE,
+                                      verbose_name='上班打卡状态', related_name='check_in_type')
+    check_out_type = models.ForeignKey(AttendanceExceptionStatus, to_field='exception_name', on_delete=models.CASCADE,
+                                       verbose_name='下班打卡状态', related_name='check_out_type')
+    check_in_status = models.CharField(verbose_name='下午考勤状态', max_length=1, choices=check_status_choice)
+    check_out_status = models.CharField(verbose_name='下午考勤状态', max_length=1, choices=check_status_choice)
     check_status = models.BooleanField('是否异常')
     attendance_date_status = models.BooleanField('是否工作日')
+
     # check_status = models.ForeignKey(AttendanceExceptionStatus, to_field='exception_name', on_delete=models.CASCADE,
     #                                      verbose_name='当天考勤状态', related_name='check_status')
 
     def __str__(self):
         return str(self.emp)
-
-    def save(self, *args, **kwargs):
-        # if self.check_in_status 
-        super(AttendanceInfo, self).save(*args, **kwargs) # Call the "real" save() method.
 
     class Meta:
         verbose_name = '考勤信息'

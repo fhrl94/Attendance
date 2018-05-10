@@ -1,28 +1,21 @@
 import xadmin
-from django.http import HttpResponse, HttpResponseRedirect
-from django.shortcuts import render, redirect
-from django.template.response import TemplateResponse
-from django.urls import reverse
-from xadmin import site
+from django.shortcuts import redirect
 from xadmin.plugins.actions import BaseActionView
-from xadmin.views import CommAdminView, filter_hook
+from xadmin.views import CommAdminView
 
 from Attendance.models import EmployeeInfo, OriginalCard, ShiftsInfo, EmployeeSchedulingInfo, EditAttendanceType, \
     EditAttendance, LeaveType, LeaveInfo, AttendanceExceptionStatus, AttendanceInfo, EmployeeInfoImport, \
     OriginalCardImport, LegalHoliday
-from Attendance.views import get_path, loading_data, data_select, ShareContext, shift_swap_select, \
-    cal_attendance_select, edit_attendance_cal
+from Attendance.views import get_path, loading_data, data_select, ShareContext, shift_swap_select, cal_attendance_select
 
 
 class SelectedShiftsInfoAction(BaseActionView):
-
     # 这里需要填写三个属性
     #: 相当于这个 Action 的唯一标示, 尽量用比较针对性的名字
     action_name = "排班选择"
     #: 描述, 出现在 Action 菜单中, 可以使用 ``%(verbose_name_plural)s`` 代替 Model 的名字.
-    description = ('排班选择 %(verbose_name_plural)s')
-    model_perm = 'change'    #: 该 Action 所需权限
-
+    description = '排班选择 %(verbose_name_plural)s'
+    model_perm = 'change'  #: 该 Action 所需权限
 
     # 而后实现 do_action 方法
     # @filter_hook
@@ -46,14 +39,14 @@ class SelectedShiftsInfoAction(BaseActionView):
         return redirect(data_select)
         # return get_scheduling_info(request=self.request, message_user=self.message_user, context=context, )
 
-class ShiftSelectAction(BaseActionView):
 
+class ShiftSelectAction(BaseActionView):
     # 这里需要填写三个属性
     #: 相当于这个 Action 的唯一标示, 尽量用比较针对性的名字
     action_name = "调班"
     #: 描述, 出现在 Action 菜单中, 可以使用 ``%(verbose_name_plural)s`` 代替 Model 的名字.
-    description = ('调班 %(verbose_name_plural)s')
-    model_perm = 'change'    #: 该 Action 所需权限
+    description = '调班 %(verbose_name_plural)s'
+    model_perm = 'change'  #: 该 Action 所需权限
 
     # 而后实现 do_action 方法
     def do_action(self, queryset):
@@ -72,14 +65,14 @@ class ShiftSelectAction(BaseActionView):
         # print(context)
         return redirect(shift_swap_select)
 
-class CalAttendanceAction(BaseActionView):
 
+class CalAttendanceAction(BaseActionView):
     # 这里需要填写三个属性
     #: 相当于这个 Action 的唯一标示, 尽量用比较针对性的名字
     action_name = "考勤计算"
     #: 描述, 出现在 Action 菜单中, 可以使用 ``%(verbose_name_plural)s`` 代替 Model 的名字.
-    description = ('考勤计算 %(verbose_name_plural)s')
-    model_perm = 'change'    #: 该 Action 所需权限
+    description = '考勤计算 %(verbose_name_plural)s'
+    model_perm = 'change'  #: 该 Action 所需权限
 
     # 而后实现 do_action 方法
     def do_action(self, queryset):
@@ -102,8 +95,8 @@ class CalAttendanceAction(BaseActionView):
 @xadmin.sites.register(EmployeeInfo)
 class EmployeeInfoAdmin(object):
     list_display = ('code', 'name', 'level', 'emp_status')
-    list_filter = ('level', 'emp_status', )
-    search_fields = ('name', 'code', )
+    list_filter = ('level', 'emp_status',)
+    search_fields = ('name', 'code',)
     actions = [SelectedShiftsInfoAction, ShiftSelectAction, CalAttendanceAction, 'test']
 
     def test(self, request, queryset):
@@ -121,28 +114,29 @@ class EmployeeInfoAdmin(object):
 
 @xadmin.sites.register(EmployeeInfoImport)
 class EmployeeInfoImportAdmin(object):
-    actions = ['upload_loading',]
+    actions = ['upload_loading', ]
 
     def upload_loading(self, request, queryset):
         path = get_path(queryset)
         name_list = loading_data(path, EmployeeInfo)
         if len(name_list):
-            self.message_user("{num}没有导入成功,{name}".format(
-                num=len(name_list),
-                name='、'.join(sorted(set(name_list), key=name_list.index))))
+            self.message_user("{num}没有导入成功,{name}".format(num=len(name_list),
+                                                          name='、'.join(sorted(set(name_list), key=name_list.index))))
+
     upload_loading.short_description = '解析文件'
     pass
+
 
 @xadmin.sites.register(OriginalCard)
 class OriginalCardAdmin(object):
     model = OriginalCard
-    list_display = ('emp', 'attendance_card', )
+    list_display = ('emp', 'attendance_card',)
     # list_filter = ('level', 'emp_status', )
-    search_fields = ('emp__code', 'emp__name', )
+    search_fields = ('emp__code', 'emp__name',)
     date_hierarchy = 'attendance_card'
 
-
     pass
+
 
 @xadmin.sites.register(OriginalCardImport)
 class OriginalCardImportAdmin(object):
@@ -152,18 +146,20 @@ class OriginalCardImportAdmin(object):
         path = get_path(queryset)
         name_list = loading_data(path, OriginalCard)
         if len(name_list):
-            self.message_user("{num}没有导入成功,{name}".format(
-                num=len(name_list),
-                name='、'.join(sorted(set(name_list), key=name_list.index))))
+            self.message_user("{num}没有导入成功,{name}".format(num=len(name_list),
+                                                          name='、'.join(sorted(set(name_list), key=name_list.index))))
 
     upload_loading.short_description = '解析文件'
     pass
 
+
 @xadmin.sites.register(ShiftsInfo)
 class ShiftsInfoAdmin(object):
-    list_display = ('name', 'type_shift', 'check_in', 'check_in_end', 'check_out_start', 'check_out', 'late_time',
-                    'leave_early_time', 'absenteeism_time', 'status')
+    list_display = (
+    'name', 'type_shift', 'check_in', 'check_in_end', 'check_out_start', 'check_out', 'late_time', 'leave_early_time',
+    'absenteeism_time', 'status')
     pass
+
 
 @xadmin.sites.register(LegalHoliday)
 class LegalHolidayAdmin(object):
@@ -171,6 +167,7 @@ class LegalHolidayAdmin(object):
     list_filter = ('status',)
     ordering = ('legal_holiday',)
     pass
+
 
 @xadmin.sites.register(EmployeeSchedulingInfo)
 class EmployeeSchedulingInfoAdmin(object):
@@ -181,52 +178,64 @@ class EmployeeSchedulingInfoAdmin(object):
     ordering = ('emp', 'attendance_date')
     pass
 
+
 @xadmin.sites.register(EditAttendanceType)
 class EditAttendanceTypeAdmin(object):
     pass
 
+
 @xadmin.sites.register(EditAttendance)
 class EditAttendanceAdmin(object):
-    actions = ['edit_attendance']
-    list_display = ('emp', 'edit_attendance_date', 'edit_attendance_time_start', 'edit_attendance_time_end',
-                    'edit_attendance_type', )
-    list_filter = ('edit_attendance_type', 'edit_attendance_date')
+    # actions = []
+    list_display = (
+    'emp', 'edit_attendance_date', 'edit_attendance_time_start', 'edit_attendance_time_end', 'edit_attendance_type',
+    'edit_attendance_status')
+    list_filter = ('edit_attendance_type',)
     search_fields = ('emp__code', 'emp__name')
 
-    def edit_attendance(self, request, queryset):
-        edit_attendance_cal(queryset)
-        pass
     pass
+
 
 @xadmin.sites.register(LeaveType)
 class LeaveTypeAdmin(object):
     pass
 
+
 @xadmin.sites.register(LeaveInfo)
 class LeaveInfoAdmin(object):
+    list_display = ('emp', 'start_date', 'leave_info_time_start', 'end_date', 'leave_info_time_end', 'leave_type',
+                    'leave_info_status',)
     pass
+
 
 @xadmin.sites.register(AttendanceExceptionStatus)
 class AttendanceExceptionStatusAdmin(object):
     pass
 
+
 @xadmin.sites.register(AttendanceInfo)
 class AttendanceInfoAdmin(object):
-    list_display = ('emp', 'attendance_date', 'check_in', 'check_in_status', 'check_out', 'check_out_status', 'check_status')
-    list_filter = ('attendance_date', 'check_in_status', 'check_out_status', 'check_status', 'emp__level', 'emp__emp_status')
+    list_display = (
+        'emp', 'attendance_date', 'check_in', 'check_in_type', 'check_in_status', 'check_out', 'check_out_type',
+        'check_out_status', 'check_status')
+    list_filter = (
+        'attendance_date', 'check_in_status', 'check_out_status', 'check_status', 'emp__level', 'emp__emp_status')
     search_fields = ('emp__code', 'emp__name')
     ordering = ('emp', 'attendance_date')
 
     def status(self):
-
         pass
+
     pass
+
 
 class GlobalSetting(object):
     # 设置base_site.html的Title
     site_title = '考勤信息处理'
     # 设置base_site.html的Footer
-    site_footer  = '考勤信息处理平台'
+    site_footer = '考勤信息处理平台'
+
+
 xadmin.site.register(CommAdminView, GlobalSetting)
 
 # xadmin.site.register(EmployeeInfo)
@@ -239,4 +248,3 @@ xadmin.site.register(CommAdminView, GlobalSetting)
 # xadmin.site.register(LeaveInfo)
 # xadmin.site.register(AttendanceExceptionStatus)
 # xadmin.site.register(AttendanceInfo)
-
