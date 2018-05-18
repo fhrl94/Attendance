@@ -1,0 +1,5 @@
+xadmin
+xlrd
+django == 1.11;
+
+# xadmin 需要将整个 git 下载后 使用 pip install 安装

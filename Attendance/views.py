@@ -5,9 +5,9 @@ from django.db.models import Q
 from django.shortcuts import render, redirect
 
 # Create your views here.
-from Attendance.forms import ShiftsInfoDateForm, DateSelectForm
 from Attendance.models import EmployeeInfoImport, OriginalCardImport, EmployeeInfo, EmployeeSchedulingInfo, ShiftsInfo, \
-    LegalHoliday, AttendanceInfo, OriginalCard, AttendanceExceptionStatus, EditAttendance, LeaveInfo, LeaveDetail
+    LegalHoliday, AttendanceInfo, OriginalCard, AttendanceExceptionStatus, EditAttendance, LeaveInfo, LeaveDetail, \
+    AttendanceTotal
 
 
 # TODO 返回友好型页面，而不是报错
@@ -21,13 +21,25 @@ class ShareContext:
             cls.instance = super(ShareContext, cls).__new__(cls)
         return cls.instance
 
-    def __init__(self, context=None, path=None, query_list=None):
+    def __init__(self, context=None, path=None, query_list=None, form=None, title=None, templates=None, callback=None,
+                 argument_dict=None):
         if context is not None:
             self.share_context = context
         if path is not None:
             self.path = path
         if query_list is not None:
             self.query_list = query_list
+        if form is not None:
+            self.form = form
+        if title is not None:
+            self.title = title
+        if templates is not None:
+            self.templates = templates
+        if callback is not None:
+            self.callback = callback
+        if argument_dict is not None:
+            assert isinstance(argument_dict, dict), "使用错误，应为字典"
+            self.argument_dict = argument_dict
 
     @staticmethod
     def clear_data():
@@ -38,8 +50,6 @@ class ShareContext:
         for key in ShareContext().__dict__:
             setattr(ShareContext(), key, None)
         pass
-
-    pass
 
 
 def get_path(queryset):
@@ -127,17 +137,20 @@ def date_range(start_date, end_date):
 
 
 # 排班计算
-def cal_scheduling_info(request, queryset, start_date, end_date, shift_name, ):
+def cal_scheduling_info(queryset, start_date, end_date, shifts_name, ):
     emp_scheduling_info_list = []
     legal_holiday_dict = {}
     # Q & = and ， | = or
-    question = Q(status=1) & Q(legal_holiday__gte=start_date) & Q(legal_holiday__lte=end_date)
+    question = Q(status='1') & Q(legal_holiday__gte=start_date) & Q(legal_holiday__lte=end_date)
     # TODO 拆包
     legal_holiday_dict_list = LegalHoliday.objects.filter(question).values('legal_holiday', 'legal_holiday_name')
     for legal_holiday_dict_one in legal_holiday_dict_list:
         legal_holiday_dict[legal_holiday_dict_one['legal_holiday']] = legal_holiday_dict_one['legal_holiday_name']
     print(legal_holiday_dict)
     for one in queryset:
+        # 删除之前的排班
+        delete_question = Q(emp=one) & Q(attendance_date__gte=start_date) & Q(attendance_date__lte=end_date)
+        EmployeeSchedulingInfo.objects.filter(delete_question).delete()
         for date in date_range(start_date, end_date):
             emp_scheduling_info = EmployeeSchedulingInfo()
             emp_scheduling_info.emp = EmployeeInfo.objects.get(id=one.id)
@@ -151,7 +164,7 @@ def cal_scheduling_info(request, queryset, start_date, end_date, shift_name, ):
                 emp_scheduling_info.shifts_name = ShiftsInfo.objects.get(name='节假日班次')
                 emp_scheduling_info.shifts_verbose_name = emp_scheduling_info.shifts_name
             else:
-                emp_scheduling_info.shifts_name = ShiftsInfo.objects.get(id=shift_name)
+                emp_scheduling_info.shifts_name = ShiftsInfo.objects.get(id=shifts_name)
                 emp_scheduling_info.shifts_verbose_name = emp_scheduling_info.shifts_name
             emp_scheduling_info.operate = datetime.datetime.now()
             emp_scheduling_info_list.append(emp_scheduling_info)
@@ -162,71 +175,8 @@ def cal_scheduling_info(request, queryset, start_date, end_date, shift_name, ):
     pass
 
 
-# TODO 使用装饰器，返回日期选择的时间，参数中应该传递要使用的表单
-# 登录验证
-@login_required(login_url='/xadmin/login/')
-def data_select(request):
-    # 此方法是给 xadmin 中使用，不存在 get 方法
-    if request.method == 'POST':
-        form = ShiftsInfoDateForm(request.POST)
-        print(form.is_valid())
-        if form.is_valid():
-            cd = form.cleaned_data
-            print(cd)
-            print('提交数据')
-            assert ShareContext().path is not None, "管理站的 path 为 None"
-            path = ShareContext().path
-            # print(ShareContext().__dict__)
-            cal_scheduling_info(request=request, queryset=ShareContext().query_list, start_date=cd['start_date'],
-                                end_date=cd['end_date'], shift_name=cd['shifts_name'])
-            ShareContext().clear_data()
-            # print(ShareContext().__dict__)
-            return redirect(path)  # return redirect('http://127.0.0.1:8000/xadmin/Attendance/employeeinfo/')
-    else:
-        form = ShiftsInfoDateForm()
-        print('获取表单')
-    # print(ShareContext().share_context)
-    assert ShareContext().share_context is not None, "管理站的context 为 None"
-    # print(ShareContext().__dict__)
-    context = ShareContext().share_context
-    # context= {}
-    context.update({"form": form, "title": "考勤计算", })
-    return render(request, 'Attendance/selected.html', context=context)
-
-
-# TODO 使用装饰器，返回日期选择的时间，参数中应该传递要使用的表单
-@login_required(login_url='/xadmin/login/')
-def shift_swap_select(request):
-    # 此方法是给 xadmin 中使用，不存在 get 方法
-    if request.method == 'POST':
-        form = DateSelectForm(request.POST)
-        print(form.is_valid())
-        if form.is_valid():
-            cd = form.cleaned_data
-            print(cd)
-            print('提交数据')
-            assert ShareContext().path is not None, "管理站的 path 为 None"
-            path = ShareContext().path
-            # print(ShareContext().__dict__)
-            shift_swap(request=request, queryset=ShareContext().query_list, start_date=cd['start_date'],
-                       end_date=cd['end_date'])
-            ShareContext().clear_data()
-            # print(ShareContext().__dict__)
-            return redirect(path)  # return redirect('http://127.0.0.1:8000/xadmin/Attendance/employeeinfo/')
-    else:
-        form = DateSelectForm()
-        print('获取表单')
-    # print(ShareContext().share_context)
-    assert ShareContext().share_context is not None, "管理站的context 为 None"
-    # print(ShareContext().__dict__)
-    context = ShareContext().share_context
-    # context= {}
-    context.update({"form": form, "title": "排班交换", })
-    return render(request, 'Attendance/selected.html', context=context)
-
-
 # 排班交换
-def shift_swap(request, queryset, start_date, end_date, ):
+def shift_swap(queryset, start_date, end_date, ):
     for one in queryset:
         query = Q(emp=one.code)
         swap_before = EmployeeSchedulingInfo.objects.filter(query & Q(attendance_date=start_date)).get()
@@ -238,33 +188,6 @@ def shift_swap(request, queryset, start_date, end_date, ):
         swap_before.save()
         swap_after.save()
     pass
-
-
-# TODO 使用装饰器，返回日期选择的时间，参数中应该传递要使用的表单
-@login_required(login_url='/xadmin/login/')
-def cal_attendance_select(request):
-    if request.method == 'POST':
-        form = DateSelectForm(request.POST)
-        print(form.is_valid())
-        if form.is_valid():
-            cd = form.cleaned_data
-            print(cd)
-            print('提交数据')
-            assert ShareContext().path is not None, "管理站的 path 为 None"
-            path = ShareContext().path
-            # cal_attendance_info(request=request, queryset=ShareContext().query_list, start_date=cd['start_date'],
-            #                     end_date=cd['end_date'])
-            #  考勤计算
-            attendance_cal(ShareContext().query_list, cd['start_date'], cd['end_date'])
-            ShareContext().clear_data()
-            return redirect(path)  # return redirect('http://127.0.0.1:8000/xadmin/Attendance/employeeinfo/')
-    else:
-        form = DateSelectForm()
-        print('获取表单')
-    assert ShareContext().share_context is not None, "管理站的context 为 None"
-    context = ShareContext().share_context
-    context.update({"form": form, "title": "考勤计算", })
-    return render(request, 'Attendance/selected.html', context=context)
 
 
 # 假期拆分
@@ -293,46 +216,27 @@ def leave_split(leave_info_ins):
         leave_detail_ins.leave_detail_time_end = shift_info_dict[shift_name].check_out
         # 当前日期为开始日期
         if attendance_date == leave_info_ins.start_date:
-            # 开始时间小于 check_in_end 则赋值 开始请假时间
+            # 开始时间小于 check_in_end 则 开始请假时间 为早上
             if leave_info_ins.leave_info_time_start <= shift_info_dict[shift_name].check_in_end:
                 leave_detail_ins.leave_detail_time_start = leave_info_ins.leave_info_time_start
-            # 否则为空
-            else:
-                leave_detail_ins.leave_detail_time_start = None
-            # 开始时间大于 check_out_start 则赋值 开始请假时间
-            if leave_info_ins.leave_info_time_start >= shift_info_dict[shift_name].check_out_start:
+            # 开始时间大于 check_out_start 则 开始请假时间 为下午
+            elif leave_info_ins.leave_info_time_start >= shift_info_dict[shift_name].check_out_start:
                 leave_detail_ins.leave_detail_time_end = leave_info_ins.leave_info_time_start
-            # 否则为空
+                leave_detail_ins.leave_detail_time_start = None
+            # 否则报错
             else:
-                leave_detail_ins.leave_detail_time_end = None
+                raise UserWarning("假期起始时间不正确")
         # 当前日期为结束日期
         if attendance_date == leave_info_ins.end_date:
-            # 开始时间小于 check_in_end 则赋值 结束请假时间
+            # leave_info_time_end小于 check_in_end 则 结束请假时间为早上
             if leave_info_ins.leave_info_time_end <= shift_info_dict[shift_name].check_in_end:
                 leave_detail_ins.leave_detail_time_start = leave_info_ins.leave_info_time_end
-            # 否则为空
-            else:
-                leave_detail_ins.leave_detail_time_start = None
-            # 开始时间大于 check_out_start 则赋值 结束请假时间
-            if leave_info_ins.leave_info_time_end >= shift_info_dict[shift_name].check_out_start:
-                leave_detail_ins.leave_detail_time_end = leave_info_ins.leave_info_time_end
-            # 否则为空
-            else:
                 leave_detail_ins.leave_detail_time_end = None
-        # 只有一天
-        if leave_info_ins.end_date == leave_info_ins.start_date:
-            # 开始时间小于 check_in_end 则赋值 结束请假时间
-            if leave_info_ins.leave_info_time_start <= shift_info_dict[shift_name].check_in_end:
-                leave_detail_ins.leave_detail_time_start = leave_info_ins.leave_info_time_start
-            # 否则为空
-            else:
-                leave_detail_ins.leave_detail_time_start = None
-            # 开始时间大于 check_out_start 则赋值 结束请假时间
-            if leave_info_ins.leave_info_time_end >= shift_info_dict[shift_name].check_out_start:
+            # eave_info_time_end大于 check_out_start 则 结束请假时间为下午
+            elif leave_info_ins.leave_info_time_end >= shift_info_dict[shift_name].check_out_start:
                 leave_detail_ins.leave_detail_time_end = leave_info_ins.leave_info_time_end
-            # 否则为空
             else:
-                leave_detail_ins.leave_detail_time_end = None
+                raise UserWarning("假期结束时间不正确")
         leave_detail_ins.leave_type = leave_info_ins.leave_type
         leave_detail_ins.leave_info_status = leave_info_ins.leave_info_status
         leave_detail_ins_list.append(leave_detail_ins)
@@ -371,16 +275,18 @@ def get_shift_info_dict():
     return shift_info_dict
     pass
 
+
 #  有效签卡识别
 def get_edit_attendance_dict(emp_one, start_date, end_date):
     assert isinstance(emp_one, EmployeeInfo), "emp 不是 EmployeeInfo 对象"
     edit_attendance_dict = {}
-    question = Q(emp=emp_one.code) & Q(edit_attendance_date__gte=start_date) & Q(edit_attendance_date__lte=end_date) &\
-               Q(edit_attendance_status='1')
+    question = Q(emp=emp_one.code) & Q(edit_attendance_date__gte=start_date) & Q(
+        edit_attendance_date__lte=end_date) & Q(edit_attendance_status='1')
     edit_attendance_list = EditAttendance.objects.filter(question).all().order_by('edit_attendance_date')
     for one in edit_attendance_list:
         edit_attendance_dict[one.edit_attendance_date] = one
     return edit_attendance_dict
+
 
 #  请假处理 有效识别
 def get_leave_detail_dict(emp_one, start_date, end_date):
@@ -392,7 +298,8 @@ def get_leave_detail_dict(emp_one, start_date, end_date):
     if len(leave_info_list):
         leave_split_cal(leave_info_list)
     leave_detail_dict = {}
-    question = Q(emp=emp_one.code) & Q(leave_date__gte=start_date) & Q(leave_date__lte=end_date) & Q(leave_info_status='1')
+    question = Q(emp=emp_one.code) & Q(leave_date__gte=start_date) & Q(leave_date__lte=end_date) & Q(
+        leave_info_status='1')
     leave_detail_list = LeaveDetail.objects.filter(question).all().order_by('leave_date')
     for one in leave_detail_list:
         leave_detail_dict[one.leave_date] = one
@@ -403,8 +310,8 @@ def get_original_card_dict(emp_one, start_date, end_date):
     assert isinstance(emp_one, EmployeeInfo), "emp 不是 EmployeeInfo 对象"
     original_card_dict = {}
     # attendance_card 是 日期加时间 ，只有一天的情况下，会出现问题
-    question = Q(emp=emp_one.code) & Q(attendance_card__gte=start_date) & Q(attendance_card__lt=datetime.datetime(
-        end_date.year, end_date.month, end_date.day) + datetime.timedelta(days=1))
+    question = Q(emp=emp_one.code) & Q(attendance_card__gte=start_date) & Q(
+        attendance_card__lt=datetime.datetime(end_date.year, end_date.month, end_date.day) + datetime.timedelta(days=1))
     original_card_dict_list = OriginalCard.objects.filter(question).all().order_by('attendance_card').values()
     for one in original_card_dict_list:
         # 嵌套字典 【打卡日期】-【Min/Max】：打卡时间 (emp_attendance)
@@ -477,8 +384,8 @@ class ExceptionAttendanceInfo:
                 self.check_in_status = '旷工'
             elif self._time_cal_return_minute(self.check_in, self.shift_info.check_in) <= self.shift_info.late_time:
                 self.check_in_status = '正常'
-            elif (self._time_cal_return_minute(self.check_in,
-                                               self.shift_info.check_in)) > self.shift_info.late_time and (
+            elif (
+            self._time_cal_return_minute(self.check_in, self.shift_info.check_in)) > self.shift_info.late_time and (
                     self._time_cal_return_minute(self.check_in,
                                                  self.shift_info.check_in) <= self.shift_info.absenteeism_time):
                 self.check_in_status = '迟到'
@@ -561,7 +468,7 @@ def attendance_cal(emp_queryset, start_date, end_date):
         # 获取原始打卡数据 get_original_card_dict
         original_card_dict = get_original_card_dict(emp, start_date, end_date)
         # 整合打卡、签卡、请假数据，赋值
-        print(scheduling_info_dict, edit_attendance_dict, leave_detail_dict, original_card_dict)
+        # print(scheduling_info_dict, edit_attendance_dict, leave_detail_dict, original_card_dict)
         for date, shift_name in scheduling_info_dict.items():
             check_in = None
             check_in_type = attendance_exception_status_card
@@ -598,3 +505,155 @@ def attendance_cal(emp_queryset, start_date, end_date):
             assert isinstance(attendance_info_tmp, AttendanceInfo), "非 AttendanceInfo 数据实例"
             attendance_info_list.append(attendance_info_tmp)
     AttendanceInfo.objects.bulk_create(attendance_info_list)
+
+
+def attendance_total_cal(emp_queryset, start_date, end_date):
+    attendance_cal(emp_queryset, start_date, end_date)
+    attendance_total_ins_list = []
+    for emp in emp_queryset:
+        del_question = Q(emp_name=emp) & Q(section_date=start_date.strftime('%Y%m'))
+        AttendanceTotal.objects.filter(del_question).delete()
+        assert isinstance(emp, EmployeeInfo), '调用错误，不是 EmployeeInfo 实例'
+        question = Q(emp=emp) & Q(attendance_date__gte=start_date) & Q(attendance_date__lte=end_date)
+        attendance_info_dict_list = AttendanceInfo.objects.filter(question).values()
+        # check_status_choice = (('0', '正常'), ('1', '迟到'), ('2', '早退'), ('3', '旷工'))
+        arrive_total = real_arrive_total = absenteeism_total = late_total = 0
+        leave_dict = {'病假': 0, '事假': 0, '年假': 0, '婚假': 0, '丧假': 0, '陪产假': 0, '产假': 0, '工伤假': 0, '探亲假': 0, '出差': 0,
+                      '其他假': 0}
+        for one in attendance_info_dict_list:
+            # 统计考勤
+            # arrive_total = arrive_total + 1 if one.get('attendance_date_status', 0) == True else 0
+            if one.get('attendance_date_status'):
+                arrive_total = arrive_total + 1
+                if one.get('check_in_status') == '3':
+                    absenteeism_total = absenteeism_total + 1
+                elif one.get('check_in_status') == '1':
+                    late_total = late_total + 1
+                if one.get('check_out_status') == '3':
+                    absenteeism_total = absenteeism_total + 1
+                elif one.get('check_out_status') == '2':
+                    late_total = late_total + 1
+            # 统计假期
+            # print(one)
+            # print(one.get('check_in_type_id'), leave_dict.get(one.get('check_in_type_id'))!= None)
+            if leave_dict.get(one.get('check_in_type_id')) != None:
+                leave_dict[one.get('check_in_type_id')] += 1
+            # 实到天数 real_arrive_total 非请假的所有出勤天数
+            elif one.get('attendance_date_status'):
+                if one.get('check_in_status') != '3':
+                    real_arrive_total = real_arrive_total + 1
+            if leave_dict.get(one.get('check_out_type_id')) != None:
+                leave_dict[one.get('check_out_type_id')] = leave_dict[one.get('check_out_type_id')] + 1
+            # 实到天数 real_arrive_total 非请假的所有出勤天数
+            elif one.get('attendance_date_status'):
+                if one.get('check_out_status') != '3':
+                    real_arrive_total = real_arrive_total + 1
+        # 将次数传入 ，AttendanceTotalInfo 后做转换
+        sick_leave_total = leave_dict['病假']
+        personal_leave_total = leave_dict['事假']
+        annual_leave_total = leave_dict['年假']
+        marriage_leave_total = leave_dict['婚假']
+        bereavement_leave_total = leave_dict['丧假']
+        paternity_leave_total = leave_dict['陪产假']
+        maternity_leave_total = leave_dict['产假']
+        work_related_injury_leave_total = leave_dict['工伤假']
+        home_leave_total = leave_dict['探亲假']
+        travelling_total = leave_dict['出差']
+        other_leave_total = leave_dict['其他假']
+        attendance_total_ins = AttendanceTotalInfo(emp=emp, section_date=start_date, arrive_total=arrive_total,
+                                                   real_arrive_total=real_arrive_total,
+                                                   absenteeism_total=absenteeism_total, late_total=late_total,
+                                                   sick_leave_total=sick_leave_total,
+                                                   personal_leave_total=personal_leave_total,
+                                                   annual_leave_total=annual_leave_total,
+                                                   marriage_leave_total=marriage_leave_total,
+                                                   bereavement_leave_total=bereavement_leave_total,
+                                                   paternity_leave_total=paternity_leave_total,
+                                                   maternity_leave_total=maternity_leave_total,
+                                                   work_related_injury_leave_total=work_related_injury_leave_total,
+                                                   home_leave_total=home_leave_total, travelling_total=travelling_total,
+                                                   other_leave_total=other_leave_total, )
+        attendance_total_ins_list.append(attendance_total_ins.save())
+    AttendanceTotal.objects.bulk_create(attendance_total_ins_list)
+    pass
+
+
+class AttendanceTotalInfo:
+
+    def __init__(self, emp, section_date, arrive_total, real_arrive_total, absenteeism_total, late_total,
+                 sick_leave_total, personal_leave_total, annual_leave_total, marriage_leave_total,
+                 bereavement_leave_total, paternity_leave_total, maternity_leave_total, work_related_injury_leave_total,
+                 home_leave_total, travelling_total, other_leave_total, ):
+        # 实到天数、 迟到不用进行处理
+        self.emp_code = emp.code
+        self.emp_name = emp
+        self.section_date = section_date.strftime('%Y%m')
+        self.arrive_total = arrive_total
+        self.real_arrive_total = real_arrive_total / 2
+        self.absenteeism_total = absenteeism_total / 2
+        self.late_total = late_total
+        self.sick_leave_total = sick_leave_total / 2
+        self.personal_leave_total = personal_leave_total / 2
+        self.annual_leave_total = annual_leave_total / 2
+        self.marriage_leave_total = marriage_leave_total / 2
+        self.bereavement_leave_total = bereavement_leave_total / 2
+        self.paternity_leave_total = paternity_leave_total / 2
+        self.maternity_leave_total = maternity_leave_total / 2
+        self.work_related_injury_leave_total = work_related_injury_leave_total / 2
+        self.home_leave_total = home_leave_total / 2
+        self.travelling_total = travelling_total / 2
+        self.other_leave_total = other_leave_total / 2
+
+        pass
+
+    def save(self):
+        attendance_total_ins = AttendanceTotal()
+        attendance_total_ins.emp_code = self.emp_code
+        attendance_total_ins.emp_name = self.emp_name
+        attendance_total_ins.section_date = self.section_date
+        attendance_total_ins.arrive_total = self.arrive_total
+        attendance_total_ins.real_arrive_total = self.real_arrive_total
+        attendance_total_ins.absenteeism_total = self.absenteeism_total
+        attendance_total_ins.late_total = self.late_total
+        attendance_total_ins.sick_leave_total = self.sick_leave_total
+        attendance_total_ins.personal_leave_total = self.personal_leave_total
+        attendance_total_ins.annual_leave_total = self.annual_leave_total
+        attendance_total_ins.marriage_leave_total = self.marriage_leave_total
+        attendance_total_ins.bereavement_leave_total = self.bereavement_leave_total
+        attendance_total_ins.paternity_leave_total = self.paternity_leave_total
+        attendance_total_ins.maternity_leave_total = self.maternity_leave_total
+        attendance_total_ins.work_related_injury_leave_total = self.work_related_injury_leave_total
+        attendance_total_ins.home_leave_total = self.home_leave_total
+        attendance_total_ins.travelling_total = self.travelling_total
+        attendance_total_ins.other_leave_total = self.other_leave_total
+        return attendance_total_ins
+        pass
+
+    pass
+
+
+#  使用回调，返回日期选择的时间，参数中应该传递要使用的表单
+@login_required(login_url='/xadmin/login/')
+def form_select(request):
+    assert ShareContext().path is not None, "管理站的 path 为 None"
+    if request.method == 'POST':
+        form = ShareContext().form(request.POST)
+        print(form.is_valid())
+        if form.is_valid():
+            cd = form.cleaned_data
+            print(cd)
+            print('提交数据')
+            path = ShareContext().path
+            temp_argument_dict = {}
+            for key, temp_dict in ShareContext().argument_dict.items():
+                temp_argument_dict[key] = cd[key]
+            ShareContext().callback(ShareContext().query_list, **temp_argument_dict)
+            ShareContext().clear_data()
+            return redirect(path)  # return redirect('http://127.0.0.1:8000/xadmin/Attendance/employeeinfo/')
+    else:
+        form = ShareContext().form()
+        print('获取表单')
+    assert ShareContext().share_context is not None, "管理站的context 为 None"
+    context = ShareContext().share_context
+    context.update({"form": form, "title": ShareContext().title, })
+    return render(request, ShareContext().templates, context=context)

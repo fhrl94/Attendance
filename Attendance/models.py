@@ -39,7 +39,7 @@ class EmployeeInfoImport(models.Model):
     # 表的结构:
     # path_name = models.FileField('文件名称', upload_to=sys.path[0] + '/upload/%Y_%m_%d/%H', )
     path_name = models.FileField('文件名称', upload_to=user_directory_path, )
-    # TODO 获取现在的时间
+    #  获取现在的时间
     upload_time = models.DateTimeField('上传时间', unique=True, auto_now=True)
 
     def __str__(self):
@@ -250,7 +250,7 @@ class LeaveInfo(models.Model):
 
     def save(self, *args, **kwargs):
         #
-        if self.start_date >= self.end_date:
+        if self.start_date <= self.end_date:
             try:
                 super(LeaveInfo, self).save(*args, **kwargs)  # Call the "real" save() method.
                 from Attendance.views import attendance_cal
@@ -310,7 +310,7 @@ class AttendanceInfo(models.Model):
                                       verbose_name='上班打卡状态', related_name='check_in_type')
     check_out_type = models.ForeignKey(AttendanceExceptionStatus, to_field='exception_name', on_delete=models.CASCADE,
                                        verbose_name='下班打卡状态', related_name='check_out_type')
-    check_in_status = models.CharField(verbose_name='下午考勤状态', max_length=1, choices=check_status_choice)
+    check_in_status = models.CharField(verbose_name='上午考勤状态', max_length=1, choices=check_status_choice)
     check_out_status = models.CharField(verbose_name='下午考勤状态', max_length=1, choices=check_status_choice)
     check_status = models.BooleanField('是否异常')
     attendance_date_status = models.BooleanField('是否工作日')
@@ -325,3 +325,32 @@ class AttendanceInfo(models.Model):
         verbose_name = '考勤信息'
         verbose_name_plural = verbose_name
         unique_together = ('emp', 'attendance_date')
+
+
+class AttendanceTotal(models.Model):
+    emp_code = models.CharField('工号', max_length=10, validators=[RegexValidator(r'^[\d]{10}')], )
+    emp_name = models.ForeignKey(EmployeeInfo, to_field='name', on_delete=models.CASCADE, verbose_name='姓名',
+                                 related_name='emp_name')
+    section_date = models.CharField('汇总区间', max_length=6, validators=[RegexValidator(r'^[\d]{6}')])
+    arrive_total = models.FloatField('应到天数', )
+    real_arrive_total = models.FloatField('实到天数', )
+    absenteeism_total = models.FloatField('旷工天数', )
+    late_total = models.FloatField('迟到/早退次数', )
+    sick_leave_total = models.FloatField('病假天数', )
+    personal_leave_total = models.FloatField('事假天数', )
+    annual_leave_total = models.FloatField('年假天数', )
+    marriage_leave_total = models.FloatField('婚假天数', )
+    bereavement_leave_total = models.FloatField('丧假天数', )
+    paternity_leave_total = models.FloatField('陪产假天数', )
+    maternity_leave_total = models.FloatField('产假天数', )
+    work_related_injury_leave_total = models.FloatField('工伤假天数', )
+    home_leave_total = models.FloatField('探亲假天数', )
+    travelling_total = models.FloatField('出差天数', )
+    other_leave_total = models.FloatField('其他假天数', )
+
+    class Meta:
+        verbose_name = '考勤汇总'
+        verbose_name_plural = verbose_name
+        unique_together = ('emp_name', 'section_date')
+
+    pass
