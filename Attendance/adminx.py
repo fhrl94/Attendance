@@ -10,7 +10,8 @@ from Attendance.forms import DateSelectForm, ShiftsInfoDateForm
 from Attendance.models import EmployeeInfo, OriginalCard, ShiftsInfo, EmployeeSchedulingInfo, EditAttendanceType, \
     EditAttendance, LeaveType, LeaveInfo, AttendanceExceptionStatus, AttendanceInfo, EmployeeInfoImport, \
     OriginalCardImport, LegalHoliday, AttendanceTotal
-from Attendance.resources import EmployeeInfoResource, OriginalCardResource
+from Attendance.resources import EmployeeInfoResource, OriginalCardResource, EditAttendanceTypeResource, \
+    LeaveTypeResource, EditAttendanceResource, LeaveInfoResource
 from Attendance.views import get_path, loading_data, ShareContext, attendance_total_cal, form_select, attendance_cal, \
     shift_swap, cal_scheduling_info
 
@@ -49,7 +50,7 @@ class ShiftSelectAction(BaseActionView):
     def do_action(self, queryset):
         context = self.get_context()
         self.message_user("选择要交换的日期")
-        ShareContext(context=context, path=self.request.path, query_list=queryset, form=DateSelectForm, title='考勤计算',
+        ShareContext(context=context, path=self.request.path, query_list=queryset, form=DateSelectForm, title='调班',
                      templates='Attendance/selected.html', callback=shift_swap,
                      argument_dict={one: "" for one in DateSelectForm.base_fields})
         return redirect(form_select)
@@ -186,7 +187,7 @@ class LegalHolidayAdmin(object):
 class EmployeeSchedulingInfoAdmin(object):
     # actions = [SelectedShiftsInfoAction, ShiftSelectAction, ]
     list_display = ('emp', 'attendance_date', 'shifts_verbose_name')
-    list_filter = ('attendance_date',)
+    list_filter = ('attendance_date', 'emp__level')
     search_fields = ('emp__code', 'emp__name')
     ordering = ('emp', 'attendance_date')
     pass
@@ -194,12 +195,14 @@ class EmployeeSchedulingInfoAdmin(object):
 
 @xadmin.sites.register(EditAttendanceType)
 class EditAttendanceTypeAdmin(object):
+    import_export_args = {'import_resource_class': EditAttendanceTypeResource, }
     pass
 
 
 @xadmin.sites.register(EditAttendance)
 class EditAttendanceAdmin(object):
     # actions = []
+    import_export_args = {'import_resource_class': EditAttendanceResource, }
     list_display = (
         'emp', 'edit_attendance_date', 'edit_attendance_time_start', 'edit_attendance_time_end', 'edit_attendance_type',
         'edit_attendance_status')
@@ -211,13 +214,17 @@ class EditAttendanceAdmin(object):
 
 @xadmin.sites.register(LeaveType)
 class LeaveTypeAdmin(object):
+    import_export_args = {'import_resource_class': LeaveTypeResource, }
     pass
 
 
 @xadmin.sites.register(LeaveInfo)
 class LeaveInfoAdmin(object):
+    import_export_args = {'import_resource_class': LeaveInfoResource, }
     list_display = ('emp', 'start_date', 'leave_info_time_start', 'end_date', 'leave_info_time_end', 'leave_type',
                     'leave_info_status',)
+    list_filter = ('leave_type',)
+    search_fields = ('emp__code', 'emp__name')
     pass
 
 
@@ -247,7 +254,7 @@ class AttendanceTotalAdmin(object):
         'sick_leave_total', 'personal_leave_total', 'annual_leave_total', 'marriage_leave_total',
         'bereavement_leave_total', 'paternity_leave_total', 'maternity_leave_total', 'work_related_injury_leave_total',
         'home_leave_total', 'travelling_total', 'other_leave_total',)
-    list_filter = ('emp_code', 'emp_name', 'section_date',)
+    list_filter = ('emp_name__level', 'emp_name__emp_status', 'section_date',)
     search_fields = ('emp_name__code', 'emp_name__name')
     ordering = ('emp_code', 'section_date')
 

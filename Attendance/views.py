@@ -221,7 +221,6 @@ def leave_split(leave_info_ins):
                 leave_detail_ins.leave_detail_time_start = leave_info_ins.leave_info_time_start
             # 开始时间大于 check_out_start 则 开始请假时间 为下午
             elif leave_info_ins.leave_info_time_start >= shift_info_dict[shift_name].check_out_start:
-                leave_detail_ins.leave_detail_time_end = leave_info_ins.leave_info_time_start
                 leave_detail_ins.leave_detail_time_start = None
             # 否则报错
             else:
@@ -230,8 +229,9 @@ def leave_split(leave_info_ins):
         if attendance_date == leave_info_ins.end_date:
             # leave_info_time_end小于 check_in_end 则 结束请假时间为早上
             if leave_info_ins.leave_info_time_end <= shift_info_dict[shift_name].check_in_end:
-                leave_detail_ins.leave_detail_time_start = leave_info_ins.leave_info_time_end
                 leave_detail_ins.leave_detail_time_end = None
+                if leave_info_ins.start_date != leave_info_ins.end_date:
+                    leave_detail_ins.leave_detail_time_start = leave_info_ins.leave_info_time_end
             # eave_info_time_end大于 check_out_start 则 结束请假时间为下午
             elif leave_info_ins.leave_info_time_end >= shift_info_dict[shift_name].check_out_start:
                 leave_detail_ins.leave_detail_time_end = leave_info_ins.leave_info_time_end

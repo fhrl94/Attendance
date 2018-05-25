@@ -282,6 +282,7 @@ class LeaveDetail(models.Model):
     class Meta:
         verbose_name = '假期明细'
         verbose_name_plural = verbose_name
+        # TODO 约束条件应为 leave_date 中的上午下午不能存在重复值
         unique_together = ('emp', 'leave_date', 'leave_info_status')
 
     pass
@@ -329,7 +330,7 @@ class AttendanceInfo(models.Model):
 
 class AttendanceTotal(models.Model):
     emp_code = models.CharField('工号', max_length=10, validators=[RegexValidator(r'^[\d]{10}')], )
-    emp_name = models.ForeignKey(EmployeeInfo, to_field='name', on_delete=models.CASCADE, verbose_name='姓名',
+    emp_name = models.ForeignKey(EmployeeInfo, to_field='code', on_delete=models.CASCADE, verbose_name='姓名',
                                  related_name='emp_name')
     section_date = models.CharField('汇总区间', max_length=6, validators=[RegexValidator(r'^[\d]{6}')])
     arrive_total = models.FloatField('应到天数', )
