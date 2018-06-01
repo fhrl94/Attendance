@@ -1,0 +1,27 @@
+{% extends 'Attendance/home_base.html' %}
+{% block content_list %}
+<div class="panel panel-success">
+    <div class="panel-heading">
+        <h3 class="panel-title">
+            <span class="glyphicon glyphicon-edit"></span> 修改密码
+        </h3>
+    </div>
+    <div class="panel-body text-center">
+        <form method="post" role="form">
+            {% csrf_token %}
+            {% if error %}
+                <div>{{error}}</div>
+            {% endif %}
+            <dl>
+            {% for field in form %}
+                    <dd class="">{{field}}<p></p></dd>
+            {% endfor %}
+            </dl>
+            <button class="btn btn-primary" type="submit">确定修改</button>
+            <button type="button" class="btn btn-default">
+                <a href="{% url 'home' %}">取消</a>
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

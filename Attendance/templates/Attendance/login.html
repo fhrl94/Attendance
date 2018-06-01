@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}考勤系统{% endblock %}</title>
+    <!-- Custom CSS -->
+    {% block css %}
+    <link href="/static/css/login.css" rel="stylesheet">
+    {% endblock %}
+</head>
+<body>
+{% block content %}
+    <!--<form method="post" >-->
+    <!--{% csrf_token %}-->
+        <!--<table>-->
+            <!--{% for field in form %}-->
+            <!--<tr>-->
+                <!--<th>{{field.label}}</th>-->
+                <!--<td>{{field}}</td>-->
+            <!--</tr>-->
+            <!--{% endfor %}-->
+            <!--<tr>-->
+                <!--<td colspan="2">-->
+                    <!--<input type="submit" value="登录" />-->
+                <!--</td>-->
+            <!--</tr>-->
+        <!--</table>-->
+    <!--</form>-->
+    <div class="wrap">
+        <div class="container">
+            <h1>武汉百捷集团，欢迎你</h1>
+            <form method="post" >
+                {% csrf_token %}
+                {% for field in form %}
+                <!--{{field.label}}-->
+                    {{field}}
+                {% endfor %}
+                <input type="submit" value="登录" />
+            </form>
+        </div>
+        <ul>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+        </ul>
+    </div>
+{% endblock content %}
+</body>
+</html>

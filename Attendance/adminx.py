@@ -117,11 +117,13 @@ class ImportMenuPlugin(BaseAdminPlugin):
 @xadmin.sites.register(EmployeeInfo)
 class EmployeeInfoAdmin(object):
     import_export_args = {'import_resource_class': EmployeeInfoResource, }
-    list_display = ('code', 'name', 'level', 'emp_status')
+    list_display = ('code', 'name', 'level', 'emp_status', 'pwd_status')
     list_filter = ('level', 'emp_status',)
     search_fields = ('name', 'code',)
     actions = [SelectedShiftsInfoAction, ShiftSelectAction, CalAttendanceAction, CalAttendanceTotalAction, ]
-
+    exclude = (
+    'first_name', 'last_name', 'email', 'is_staff', 'date_joined', 'last_login', 'is_active', 'is_superuser', 'groups',
+    'user_permissions')
     pass
 
 
@@ -169,9 +171,8 @@ class OriginalCardImportAdmin(object):
 
 @xadmin.sites.register(ShiftsInfo)
 class ShiftsInfoAdmin(object):
-    list_display = (
-    'name', 'type_shift', 'check_in', 'check_in_end', 'check_out_start', 'check_out', 'late_time', 'leave_early_time',
-    'absenteeism_time', 'status')
+    list_display = ('name', 'type_shift', 'check_in', 'check_in_end', 'check_out_start', 'check_out', 'late_time',
+                    'leave_early_time', 'absenteeism_time', 'status')
     pass
 
 
@@ -221,8 +222,8 @@ class LeaveTypeAdmin(object):
 @xadmin.sites.register(LeaveInfo)
 class LeaveInfoAdmin(object):
     import_export_args = {'import_resource_class': LeaveInfoResource, }
-    list_display = ('emp', 'start_date', 'leave_info_time_start', 'end_date', 'leave_info_time_end', 'leave_type',
-                    'leave_info_status',)
+    list_display = (
+    'emp', 'start_date', 'leave_info_time_start', 'end_date', 'leave_info_time_end', 'leave_type', 'leave_info_status',)
     list_filter = ('leave_type',)
     search_fields = ('emp__code', 'emp__name')
     pass

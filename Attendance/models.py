@@ -1,6 +1,8 @@
 import sys
 
 import datetime
+
+from django.contrib.auth.models import User
 from django.core.validators import RegexValidator
 from django.db import models, IntegrityError
 
@@ -17,15 +19,17 @@ def user_directory_path(instance, filename):
                                                   time=datetime.datetime.today().strftime('%Y_%m_%d_%H_%M_%S'))
 
 
-class EmployeeInfo(models.Model):
+class EmployeeInfo(User):
     # emp_status_choice = (('0', '已离职'), ('1', '在职'), ('2', '试用'), ('3', '实习'))
-
+    # 继承 User 在导入或新增的时候，能直接实现数据查看
+    #  可以看到用户密码 的加密
     # 表的结构:
     name = models.CharField('姓名', max_length=10)
     code = models.CharField('工号', max_length=10, validators=[RegexValidator(r'^[\d]{10}')], unique=True)
-    # TODO 排班时，需要做筛选
+    #  排班时，需要做筛选，使用书签实现
     level = models.CharField('级别', max_length=10, )
     emp_status = models.CharField('员工状态', max_length=4, )
+    pwd_status = models.BooleanField('密码是否修改')
 
     def __str__(self):
         return self.name
@@ -80,7 +84,6 @@ class OriginalCardImport(models.Model):
 
 
 # 班次
-# TODO 排班规则
 class ShiftsInfo(models.Model):
     # type_shift_choice = (('0', '节假日'), ('1', '工作日'))
     # TODO 在admin的删除动作中实现标记为失效
@@ -177,7 +180,7 @@ class EditAttendanceType(AttendanceExceptionStatus):
         verbose_name = '签卡原因'
         verbose_name_plural = verbose_name
 
-
+# TODO 约束条件应为 edit_attendance_date 中的上午下午不能存在重复值
 class EditAttendance(models.Model):
     emp = models.ForeignKey(EmployeeInfo, to_field='code', on_delete=models.CASCADE, verbose_name='工号')
     edit_attendance_date = models.DateField('签卡日期')

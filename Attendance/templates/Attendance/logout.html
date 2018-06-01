@@ -1,0 +1,13 @@
+{% extends 'Attendance/home_base.html' %}
+{% block content_list %}
+<div class="panel panel-success">
+    <div class="panel-heading text-right">
+        <h3 class="panel-title">
+            <a href="{% url 'home' %}"><span class="glyphicon glyphicon-log-in"></span>登录</a>
+        </h3>
+    </div>
+    <div class="panel-body text-center">
+        <h2>您已退出！</h2>
+    </div>
+</div>
+{% endblock %}

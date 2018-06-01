@@ -1,10 +1,16 @@
 import datetime
 import xlrd
+from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db.models import Q
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, redirect
 
 # Create your views here.
+from django.urls import reverse
+
+from Attendance.forms import UserForm, ChangePwdForm
 from Attendance.models import EmployeeInfoImport, OriginalCardImport, EmployeeInfo, EmployeeSchedulingInfo, ShiftsInfo, \
     LegalHoliday, AttendanceInfo, OriginalCard, AttendanceExceptionStatus, EditAttendance, LeaveInfo, LeaveDetail, \
     AttendanceTotal
@@ -13,7 +19,7 @@ from Attendance.models import EmployeeInfoImport, OriginalCardImport, EmployeeIn
 # TODO 返回友好型页面，而不是报错
 class ShareContext:
     """
-    共享 xadmin 数据
+    共享 xadmin 数据 ，跳转到个人绘制的 视图 时，仍套用xadmin的框架
     """
 
     def __new__(cls, *args, **kwargs):
@@ -53,6 +59,12 @@ class ShareContext:
 
 
 def get_path(queryset):
+    """
+    获取上传文件的路劲
+    :param queryset:
+    :return:
+    """
+    # TODO 数据导入，待清理
     tables = [EmployeeInfoImport, OriginalCardImport]
     # 如果选择2个则报错
     # print(len(queryset))
@@ -68,6 +80,13 @@ def get_path(queryset):
 
 
 def loading_data(path, table):
+    """
+    # TODO  待清理
+    读取人员信息、考勤打卡记录
+    :param path:
+    :param table:
+    :return:
+    """
     name_list = []
     print(type(table._meta.fields))
     # 删除以前所有数据
@@ -127,6 +146,13 @@ def loading_data(path, table):
 
 
 def date_range(start_date, end_date):
+    """
+    生成一个 起始时间 到 结束时间 的一个列表
+    TODO 起始时间和结束时间相差过大时，考虑使用 yield
+    :param start_date:
+    :param end_date:
+    :return:
+    """
     date_tmp = [start_date, ]
     # print(date_tmp[-1])
     assert date_tmp[-1] <= end_date, "开始日期大于结束日期"
@@ -138,6 +164,15 @@ def date_range(start_date, end_date):
 
 # 排班计算
 def cal_scheduling_info(queryset, start_date, end_date, shifts_name, ):
+    """
+    将 周一 到 周五 排 shifts_name 的班次，其余的排 节假日班次；
+    节假日班次需要自己创建
+    :param queryset: 人员列表
+    :param start_date:
+    :param end_date:
+    :param shifts_name: 班次
+    :return:
+    """
     emp_scheduling_info_list = []
     legal_holiday_dict = {}
     # Q & = and ， | = or
@@ -177,6 +212,14 @@ def cal_scheduling_info(queryset, start_date, end_date, shifts_name, ):
 
 # 排班交换
 def shift_swap(queryset, start_date, end_date, ):
+    """
+    交换排班
+    TODO 待优化
+    :param queryset: 人员列表
+    :param start_date:
+    :param end_date:
+    :return:
+    """
     for one in queryset:
         query = Q(emp=one.code)
         swap_before = EmployeeSchedulingInfo.objects.filter(query & Q(attendance_date=start_date)).get()
@@ -256,6 +299,7 @@ def leave_split_cal(queryset):
     pass
 
 
+# 获取 人员排班信息
 def get_scheduling_info_dict(emp_one, start_date, end_date):
     assert isinstance(emp_one, EmployeeInfo), "emp 不是 EmployeeInfo 对象"
     scheduling_info_dict = {}
@@ -267,6 +311,7 @@ def get_scheduling_info_dict(emp_one, start_date, end_date):
     return scheduling_info_dict
 
 
+# 获取班次信息
 def get_shift_info_dict():
     shift_info_dict = {}
     shift_info_list = ShiftsInfo.objects.all()
@@ -276,7 +321,7 @@ def get_shift_info_dict():
     pass
 
 
-#  有效签卡识别
+#  获取有效的签卡信息
 def get_edit_attendance_dict(emp_one, start_date, end_date):
     assert isinstance(emp_one, EmployeeInfo), "emp 不是 EmployeeInfo 对象"
     edit_attendance_dict = {}
@@ -306,6 +351,7 @@ def get_leave_detail_dict(emp_one, start_date, end_date):
     return leave_detail_dict
 
 
+# 获取原始打卡数据
 def get_original_card_dict(emp_one, start_date, end_date):
     assert isinstance(emp_one, EmployeeInfo), "emp 不是 EmployeeInfo 对象"
     original_card_dict = {}
@@ -327,6 +373,7 @@ def get_original_card_dict(emp_one, start_date, end_date):
     pass
 
 
+# 实现 AttendanceInfo 的实例申请，以及数据处理和赋值
 class ExceptionAttendanceInfo:
     """
     初始赋值后，调用 attendance_info_ins() 返回 AttendanceInfo 实例
@@ -384,8 +431,8 @@ class ExceptionAttendanceInfo:
                 self.check_in_status = '旷工'
             elif self._time_cal_return_minute(self.check_in, self.shift_info.check_in) <= self.shift_info.late_time:
                 self.check_in_status = '正常'
-            elif (
-            self._time_cal_return_minute(self.check_in, self.shift_info.check_in)) > self.shift_info.late_time and (
+            elif (self._time_cal_return_minute(self.check_in,
+                                               self.shift_info.check_in)) > self.shift_info.late_time and (
                     self._time_cal_return_minute(self.check_in,
                                                  self.shift_info.check_in) <= self.shift_info.absenteeism_time):
                 self.check_in_status = '迟到'
@@ -426,7 +473,7 @@ class ExceptionAttendanceInfo:
     pass
 
 
-# 拆分单据后的计算
+# 考勤明细计算
 def attendance_cal(emp_queryset, start_date, end_date):
     # 获取排班信息 get_scheduling_info_dict
     # 获取班次信息 get_shift_info_dict
@@ -507,6 +554,7 @@ def attendance_cal(emp_queryset, start_date, end_date):
     AttendanceInfo.objects.bulk_create(attendance_info_list)
 
 
+# 考勤汇总计算
 def attendance_total_cal(emp_queryset, start_date, end_date):
     attendance_cal(emp_queryset, start_date, end_date)
     attendance_total_ins_list = []
@@ -577,7 +625,7 @@ def attendance_total_cal(emp_queryset, start_date, end_date):
     AttendanceTotal.objects.bulk_create(attendance_total_ins_list)
     pass
 
-
+# 实现 AttendanceTotal 的实例申请，以及数据处理和赋值
 class AttendanceTotalInfo:
 
     def __init__(self, emp, section_date, arrive_total, real_arrive_total, absenteeism_total, late_total,
@@ -657,3 +705,148 @@ def form_select(request):
     context = ShareContext().share_context
     context.update({"form": form, "title": ShareContext().title, })
     return render(request, ShareContext().templates, context=context)
+
+# 用户登录界面
+def user_login(request):
+    """
+    用户登录，登录成功后返回 home_form(request)
+    :param request:
+    :return:
+    """
+    if request.method == 'POST':
+        form = UserForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            user = authenticate(username=cd['user'], password=cd['pwd'])
+            print(user)
+            if user is not None:
+                if user.is_active:
+                    login(request, user)
+                    # return HttpResponseRedirect(redirect_to='/index/')
+                    # return HttpResponseRedirect(request.POST.get('next', '/') or '/')
+                    return HttpResponseRedirect(reverse(home_form))
+                else:
+                    return error_404(request, '禁止访问')
+            else:
+                return error_404(request, '账号或密码错误')
+    else:
+        form = UserForm()
+    return render(request, template_name='Attendance/login.html', context={'form': form})
+
+
+# 用户主界面
+@login_required(login_url="login")
+def home_form(request):
+    """
+    登录后直接跳转页面， 【首页】，提示员工是否有相关问卷需要填写
+    :param request:
+    :return:
+    """
+    user = getattr(request, 'user', None)
+    #  查询考勤数据 ,并返回结果 使用 ajax_dict 查询数据时，进行自动计算
+    print(user.id)
+    user_emp = EmployeeInfo.objects.filter(user_ptr_id=user.id).get()
+    if user_emp.pwd_status != True:
+        return change_pwd(request)
+    # 使用 js 来处理
+    return render(request, template_name='Attendance/home.html', context={'user_emp': user_emp, })
+
+
+# 修改密码
+@login_required(login_url="login")
+def change_pwd(request):
+    login_user = getattr(request, 'user', None)
+    user_emp = EmployeeInfo.objects.filter(user_ptr_id=login_user.id).get()
+    if request.method == 'POST':
+        form = ChangePwdForm(request.POST)
+        print(form.is_valid())
+        if form.is_valid():
+            cd = form.cleaned_data
+            # print(cd)
+            user = authenticate(username=request.user.username, password=cd['old_pwd'])
+            print(user)
+            if user is not None:
+                if user.is_active:
+                    user.set_password(cd['new_pwd1'])
+                    user.save()
+                    user_emp.pwd_status = True
+                    user_emp.save()
+                    return error_404(request, '密码已修改，请重新登录')
+                else:
+                    return error_404(request, '禁止访问')
+            else:
+                return error_404(request, '原始密码错误')
+        else:
+            return render(request, template_name='Attendance/change_pwd.html',
+                          context={'form': form, 'error': "2次密码不一致"})
+    else:
+        form = ChangePwdForm()
+    if user_emp.pwd_status != True:
+        error_str = "首次登录，请修改密码"
+    else:
+        error_str = None
+    return render(request, template_name='Attendance/change_pwd.html', context={'form': form, 'error': error_str, })
+    pass
+
+
+# 友善 404 页面
+def error_404(request, error_body):
+    """
+    异常
+    :param request:
+    :param error_body: 异常原因（文本)
+    :return:
+    """
+    return render(request, template_name='Attendance/404.html', context={'error_body': error_body, })
+    pass
+
+
+# 登出页面
+def user_logout(request):
+    """
+    登出
+    :param request:
+    :return:
+    """
+    logout(request)
+    return render(request, template_name='Attendance/logout.html')
+    pass
+
+# 数据查询（基于ajax）
+@login_required(login_url="login")
+def ajax_dict(request):
+    date_list = []
+    models_dict = {'attendance_detail': AttendanceInfo, 'attendance_summary': AttendanceTotal,
+                   'edit_attendance': EditAttendance, 'leave_info': LeaveInfo, }
+    login_user = getattr(request, 'user', None)
+    user_emp = EmployeeInfo.objects.filter(user_ptr_id=login_user.id).get()
+    # print(request.POST.get("start_date"), request.POST.get("end_date"))
+    start_date = request.POST.get("start_date")
+    end_date = request.POST.get("end_date")
+    try:
+        attendance_total_cal((user_emp,), start_date=datetime.datetime.strptime(start_date, '%Y-%m-%d'),
+                             end_date=datetime.datetime.strptime(end_date, '%Y-%m-%d'))
+    except ValidationError:
+        return JsonResponse([{'err': '没有填写日期'}, ], safe=False)
+    attendance_detail_questions = Q(attendance_date__gte=start_date) & Q(
+        attendance_date__lte=end_date) & Q(emp=user_emp)
+    attendance_summary_questions = Q(
+        section_date=datetime.datetime.strptime(start_date, '%Y-%m-%d').strftime('%Y%m')) & Q(
+        emp_name=user_emp)
+    edit_attendance_questions = Q(edit_attendance_date__gte=start_date) & Q(
+        edit_attendance_date__lte=end_date) & Q(emp=user_emp)
+    leave_info_questions = Q(end_date__gte=start_date) & Q(
+        start_date__lte=end_date) & Q(emp=user_emp)
+    query_key = {'attendance_detail': attendance_detail_questions, 'attendance_summary': attendance_summary_questions,
+                 'edit_attendance': edit_attendance_questions, 'leave_info': leave_info_questions, }
+    order_key = {'attendance_detail': 'attendance_date', 'attendance_summary': 'section_date',
+                 'edit_attendance': 'edit_attendance_date', 'leave_info': 'start_date', }
+    if models_dict.get(request.POST.get("title_type")):
+        attendance_list = models_dict[request.POST.get("title_type")].objects.filter(
+            query_key[request.POST.get("title_type")]).order_by(order_key[request.POST.get("title_type")]).values()
+    else:
+        return JsonResponse([{'err': '待开发'}, ], safe=False)
+    for one in attendance_list:
+        date_list.append(one)
+        pass
+    return JsonResponse(date_list, safe=False)

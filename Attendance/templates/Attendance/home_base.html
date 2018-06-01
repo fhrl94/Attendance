@@ -1,0 +1,61 @@
+{% extends 'Attendance/base.html' %}
+{% block bootstrap3_extra_head %}
+{% endblock %}
+{% load bootstrap3 %}
+
+{% block title %}{% endblock %}
+{% block content %}
+    <!--suppress HtmlUnknownTarget -->
+    <nav class="navbar navbar-default" role="navigation">
+        <div class="container-fluid">
+            <div class="navbar-header">
+                <a class="navbar-brand" href="{% url 'home' %}">
+                    <span class="glyphicon glyphicon-home"></span> 主页</a>
+            </div>
+            <div>
+                <ul class="nav nav-tabs" id="my_tab">
+                    <li class="active">
+                        <a href="#" data-toggle="pill" id="attendance_detail">
+                            <span class="glyphicon glyphicon-th-list"></span> 考勤明细
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-toggle="pill" id="attendance_summary">
+                            <span class="glyphicon glyphicon-th-list"></span> 考勤汇总
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-toggle="pill" id="edit_attendance">
+                            <span class="glyphicon glyphicon-th-list"></span> 签卡明细
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-toggle="pill" id="leave_info">
+                            <span class="glyphicon glyphicon-th-list"></span> 请假明细
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-toggle="pill" id="annual_leave_credits">
+                            <span class="glyphicon glyphicon-th-list"></span> 年假额度
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-toggle="pill" id="help_text">
+                            <span class="glyphicon glyphicon-th-list"></span> 常见问题说明
+                        </a>
+                    </li>
+                    <li class="navbar-right">
+                        <a href="{% url 'logout' %}" class="btn-success">
+                        <span class="glyphicon glyphicon-log-out"></span> 退出登录</a></li>
+                    <li class="navbar-right">
+                        <a href="{% url 'change_pwd' %}" class="btn-warning">
+                        <span class="glyphicon glyphicon-hand-right"></span> 修改密码</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    {% block content_list %}
+    {% endblock %}
+{% endblock %}
+{% block bootstrap3_extra_script %}
+{% endblock %}

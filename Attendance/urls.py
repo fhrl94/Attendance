@@ -20,4 +20,9 @@ from Attendance import views
 urlpatterns = [
     # URL暴露了，确保有登录验证
     url(r'^form_select', views.form_select, name='form_select'),
+    url(r'^login/', view=views.user_login, name='login'),
+    url(r'^home/', view=views.home_form, name='home'),
+    url(r'^change_pwd/', view=views.change_pwd, name='change_pwd'),
+    url(r'^logout/', view=views.user_logout, name='logout'),
+    url(r'^ajax_dict/$', views.ajax_dict, name='ajax_dict'),
 ]
