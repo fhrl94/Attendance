@@ -10,7 +10,14 @@ class DateSelectForm(forms.Form):
     pass
 
 
-
+#   更新排班后需要重启，已完成
+def get_shifts_name():
+    from Attendance.models import ShiftsInfo
+    query_set = ShiftsInfo.objects.filter(status='1')
+    name_choices = [("", "—请选择—")]
+    for one in query_set.iterator():
+        name_choices.append((one.id, one.name,))
+    return name_choices
 
 
 class ShiftsInfoDateForm(forms.Form):
@@ -23,6 +30,12 @@ class ShiftsInfoDateForm(forms.Form):
     shifts_name = forms.ChoiceField(label=u"选择班次名称", widget=forms.Select(
         attrs={'class': 'form-control', 'placeholder': '选择班次名称', 'id': 'shifts_name', }),
                                     choices=[("", "—请选择—")])
+
+    def __init__(self, *args, **kwargs):
+        super(ShiftsInfoDateForm, self).__init__(*args, **kwargs)
+        # 初始化时，对选项进行更新
+        self['shifts_name'].field.choices = get_shifts_name
+
     pass
 
 
