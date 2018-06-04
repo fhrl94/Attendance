@@ -700,6 +700,11 @@ def form_select(request):
             return redirect(path)  # return redirect('http://127.0.0.1:8000/xadmin/Attendance/employeeinfo/')
     else:
         form = ShareContext().form()
+        query_set = ShiftsInfo.objects.filter(status='1')
+        name_choices = [("", "—请选择—")]
+        for one in query_set.iterator():
+            name_choices.append((one.id, one.name,))
+        form['shifts_name'].field.choices = name_choices
         print('获取表单')
     assert ShareContext().share_context is not None, "管理站的context 为 None"
     context = ShareContext().share_context
