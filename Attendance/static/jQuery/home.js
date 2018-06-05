@@ -134,7 +134,7 @@ $(document).ready(function(){
         $("#table_title").empty();
         var $title_tr_temp = $("<tr></tr>");
         $.each(content_dict[title_type], function () {
-            $title_tr_temp.append("<th>" + this + "</th>");
+            $title_tr_temp.append("<th class=\"text-center\">" + this + "</th>");
         });
         $title_tr_temp.appendTo("#data_content_table");
         $title_tr_temp.appendTo("#table_title");
@@ -149,7 +149,7 @@ $(document).ready(function(){
             $tr_temp.appendTo("#data_content_table");
         }
         $("#num_query").empty();
-        $("#num_query").text("共查到" + date_dict_list.length + "条记录");
+        $("#num_query").text("共查到 " + date_dict_list.length + " 条记录");
         if (title_type !== 'attendance_detail'){
             $('#content_filter_label').addClass("hidden");
         }
@@ -226,7 +226,7 @@ $(document).ready(function(){
             });
         $(".leave_type_id, .edit_attendance_type_id").each(function(){
                 switch ($(this).text()){
-                    case '1': $(this).text('打卡');break;
+                    // case '1': $(this).text('打卡');break;
                     case '2': $(this).text('见客户');break;
                     case '3': $(this).text('参会');break;
                     case '4': $(this).text('因公外出');break;
@@ -247,6 +247,11 @@ $(document).ready(function(){
                     case '19': $(this).text('其他假');break;
                     case '20': $(this).text('工伤假');break;
                     case '21': $(this).text('探亲假');break;
+                }
+            });
+        $(".check_in_type_id, .check_out_type_id").each(function(){
+                switch ($(this).text()){
+                    case '打卡': $(this).text("");break;
                 }
             });
     }

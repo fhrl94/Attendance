@@ -1,12 +1,12 @@
+import calendar
 import datetime
+
 import xlrd
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, redirect
-
 # Create your views here.
 from django.urls import reverse
 
@@ -556,74 +556,91 @@ def attendance_cal(emp_queryset, start_date, end_date):
 
 # 考勤汇总计算
 def attendance_total_cal(emp_queryset, start_date, end_date):
+    assert end_date >= start_date, "开始时间小于等于结束时间"
     attendance_cal(emp_queryset, start_date, end_date)
     attendance_total_ins_list = []
     for emp in emp_queryset:
-        del_question = Q(emp_name=emp) & Q(section_date=start_date.strftime('%Y%m'))
-        AttendanceTotal.objects.filter(del_question).delete()
         assert isinstance(emp, EmployeeInfo), '调用错误，不是 EmployeeInfo 实例'
-        question = Q(emp=emp) & Q(attendance_date__gte=start_date) & Q(attendance_date__lte=end_date)
-        attendance_info_dict_list = AttendanceInfo.objects.filter(question).values()
-        # check_status_choice = (('0', '正常'), ('1', '迟到'), ('2', '早退'), ('3', '旷工'))
-        arrive_total = real_arrive_total = absenteeism_total = late_total = 0
-        leave_dict = {'病假': 0, '事假': 0, '年假': 0, '婚假': 0, '丧假': 0, '陪产假': 0, '产假': 0, '工伤假': 0, '探亲假': 0, '出差': 0,
-                      '其他假': 0}
-        for one in attendance_info_dict_list:
-            # 统计考勤
-            # arrive_total = arrive_total + 1 if one.get('attendance_date_status', 0) == True else 0
-            if one.get('attendance_date_status'):
-                arrive_total = arrive_total + 1
-                if one.get('check_in_status') == '3':
-                    absenteeism_total = absenteeism_total + 1
-                elif one.get('check_in_status') == '1':
-                    late_total = late_total + 1
-                if one.get('check_out_status') == '3':
-                    absenteeism_total = absenteeism_total + 1
-                elif one.get('check_out_status') == '2':
-                    late_total = late_total + 1
-            # 统计假期
-            # print(one)
-            # print(one.get('check_in_type_id'), leave_dict.get(one.get('check_in_type_id'))!= None)
-            if leave_dict.get(one.get('check_in_type_id')) != None:
-                leave_dict[one.get('check_in_type_id')] += 1
-            # 实到天数 real_arrive_total 非请假的所有出勤天数
-            elif one.get('attendance_date_status'):
-                if one.get('check_in_status') != '3':
-                    real_arrive_total = real_arrive_total + 1
-            if leave_dict.get(one.get('check_out_type_id')) != None:
-                leave_dict[one.get('check_out_type_id')] = leave_dict[one.get('check_out_type_id')] + 1
-            # 实到天数 real_arrive_total 非请假的所有出勤天数
-            elif one.get('attendance_date_status'):
-                if one.get('check_out_status') != '3':
-                    real_arrive_total = real_arrive_total + 1
-        # 将次数传入 ，AttendanceTotalInfo 后做转换
-        sick_leave_total = leave_dict['病假']
-        personal_leave_total = leave_dict['事假']
-        annual_leave_total = leave_dict['年假']
-        marriage_leave_total = leave_dict['婚假']
-        bereavement_leave_total = leave_dict['丧假']
-        paternity_leave_total = leave_dict['陪产假']
-        maternity_leave_total = leave_dict['产假']
-        work_related_injury_leave_total = leave_dict['工伤假']
-        home_leave_total = leave_dict['探亲假']
-        travelling_total = leave_dict['出差']
-        other_leave_total = leave_dict['其他假']
-        attendance_total_ins = AttendanceTotalInfo(emp=emp, section_date=start_date, arrive_total=arrive_total,
-                                                   real_arrive_total=real_arrive_total,
-                                                   absenteeism_total=absenteeism_total, late_total=late_total,
-                                                   sick_leave_total=sick_leave_total,
-                                                   personal_leave_total=personal_leave_total,
-                                                   annual_leave_total=annual_leave_total,
-                                                   marriage_leave_total=marriage_leave_total,
-                                                   bereavement_leave_total=bereavement_leave_total,
-                                                   paternity_leave_total=paternity_leave_total,
-                                                   maternity_leave_total=maternity_leave_total,
-                                                   work_related_injury_leave_total=work_related_injury_leave_total,
-                                                   home_leave_total=home_leave_total, travelling_total=travelling_total,
-                                                   other_leave_total=other_leave_total, )
-        attendance_total_ins_list.append(attendance_total_ins.save())
+        # 获取年月，取得区间月份
+        month = 0
+        if end_date.year - start_date.year == 0:
+            month = end_date.month - start_date.month
+        elif end_date.year - start_date.year >= 1:
+            month = end_date.month - start_date.month + (end_date.year - start_date.year) * 12
+        start_date_tmp = start_date.replace(day=1)
+        for num in range(month + 1):
+            current_month_num = calendar.monthrange(start_date_tmp.year, start_date_tmp.month)[1]
+            del_question_start = Q(emp_name=emp) & Q(section_date=start_date_tmp.strftime('%Y%m'))
+            AttendanceTotal.objects.filter(del_question_start).delete()
+            question = Q(emp=emp) & Q(attendance_date__gte=start_date_tmp) & Q(
+                attendance_date__lte=start_date_tmp.replace(day=current_month_num))
+            attendance_info_dict_list = AttendanceInfo.objects.filter(question).values()
+            # check_status_choice = (('0', '正常'), ('1', '迟到'), ('2', '早退'), ('3', '旷工'))
+            attendance_total_ins = attendance_total_cal_sum(emp, start_date_tmp, attendance_info_dict_list)
+            attendance_total_ins_list.append(attendance_total_ins.save())
+            start_date_tmp += datetime.timedelta(days=current_month_num)
     AttendanceTotal.objects.bulk_create(attendance_total_ins_list)
     pass
+
+
+def attendance_total_cal_sum(emp, start_date, attendance_info_dict_list):
+    arrive_total = real_arrive_total = absenteeism_total = late_total = 0
+    leave_dict = {'病假': 0, '事假': 0, '年假': 0, '婚假': 0, '丧假': 0, '陪产假': 0, '产假': 0, '工伤假': 0, '探亲假': 0, '出差': 0, '其他假': 0}
+    for one in attendance_info_dict_list:
+        # 统计考勤
+        # arrive_total = arrive_total + 1 if one.get('attendance_date_status', 0) == True else 0
+        if one.get('attendance_date_status'):
+            arrive_total = arrive_total + 1
+            if one.get('check_in_status') == '3':
+                absenteeism_total = absenteeism_total + 1
+            elif one.get('check_in_status') == '1':
+                late_total = late_total + 1
+            if one.get('check_out_status') == '3':
+                absenteeism_total = absenteeism_total + 1
+            elif one.get('check_out_status') == '2':
+                late_total = late_total + 1
+        # 统计假期
+        # print(one)
+        # print(one.get('check_in_type_id'), leave_dict.get(one.get('check_in_type_id'))!= None)
+        if leave_dict.get(one.get('check_in_type_id')) != None:
+            leave_dict[one.get('check_in_type_id')] += 1
+        # 实到天数 real_arrive_total 非请假的所有出勤天数
+        elif one.get('attendance_date_status'):
+            if one.get('check_in_status') != '3':
+                real_arrive_total = real_arrive_total + 1
+        if leave_dict.get(one.get('check_out_type_id')) != None:
+            leave_dict[one.get('check_out_type_id')] = leave_dict[one.get('check_out_type_id')] + 1
+        # 实到天数 real_arrive_total 非请假的所有出勤天数
+        elif one.get('attendance_date_status'):
+            if one.get('check_out_status') != '3':
+                real_arrive_total = real_arrive_total + 1
+    # 将次数传入 ，AttendanceTotalInfo 后做转换
+    sick_leave_total = leave_dict['病假']
+    personal_leave_total = leave_dict['事假']
+    annual_leave_total = leave_dict['年假']
+    marriage_leave_total = leave_dict['婚假']
+    bereavement_leave_total = leave_dict['丧假']
+    paternity_leave_total = leave_dict['陪产假']
+    maternity_leave_total = leave_dict['产假']
+    work_related_injury_leave_total = leave_dict['工伤假']
+    home_leave_total = leave_dict['探亲假']
+    travelling_total = leave_dict['出差']
+    other_leave_total = leave_dict['其他假']
+    attendance_total_ins = AttendanceTotalInfo(emp=emp, section_date=start_date, arrive_total=arrive_total,
+                                               real_arrive_total=real_arrive_total, absenteeism_total=absenteeism_total,
+                                               late_total=late_total, sick_leave_total=sick_leave_total,
+                                               personal_leave_total=personal_leave_total,
+                                               annual_leave_total=annual_leave_total,
+                                               marriage_leave_total=marriage_leave_total,
+                                               bereavement_leave_total=bereavement_leave_total,
+                                               paternity_leave_total=paternity_leave_total,
+                                               maternity_leave_total=maternity_leave_total,
+                                               work_related_injury_leave_total=work_related_injury_leave_total,
+                                               home_leave_total=home_leave_total, travelling_total=travelling_total,
+                                               other_leave_total=other_leave_total, )
+    return attendance_total_ins
+    pass
+
 
 # 实现 AttendanceTotal 的实例申请，以及数据处理和赋值
 class AttendanceTotalInfo:
@@ -705,6 +722,7 @@ def form_select(request):
     context = ShareContext().share_context
     context.update({"form": form, "title": ShareContext().title, })
     return render(request, ShareContext().templates, context=context)
+
 
 # 用户登录界面
 def user_login(request):
@@ -812,6 +830,7 @@ def user_logout(request):
     return render(request, template_name='Attendance/logout.html')
     pass
 
+
 # 数据查询（基于ajax）
 @login_required(login_url="login")
 def ajax_dict(request):
@@ -824,19 +843,18 @@ def ajax_dict(request):
     start_date = request.POST.get("start_date")
     end_date = request.POST.get("end_date")
     try:
-        attendance_total_cal((user_emp,), start_date=datetime.datetime.strptime(start_date, '%Y-%m-%d'),
-                             end_date=datetime.datetime.strptime(end_date, '%Y-%m-%d'))
-    except ValidationError:
+        # 控制员工能计算的范围
+        user_cal(user_emp, start_date, end_date)
+    except ValueError:
         return JsonResponse([{'err': '没有填写日期'}, ], safe=False)
-    attendance_detail_questions = Q(attendance_date__gte=start_date) & Q(
-        attendance_date__lte=end_date) & Q(emp=user_emp)
+    attendance_detail_questions = Q(attendance_date__gte=start_date) & Q(attendance_date__lte=end_date) & Q(
+        emp=user_emp)
     attendance_summary_questions = Q(
-        section_date=datetime.datetime.strptime(start_date, '%Y-%m-%d').strftime('%Y%m')) & Q(
-        emp_name=user_emp)
-    edit_attendance_questions = Q(edit_attendance_date__gte=start_date) & Q(
-        edit_attendance_date__lte=end_date) & Q(emp=user_emp)
-    leave_info_questions = Q(end_date__gte=start_date) & Q(
-        start_date__lte=end_date) & Q(emp=user_emp)
+        section_date__gte=datetime.datetime.strptime(start_date, '%Y-%m-%d').strftime('%Y%m')) & Q(
+        section_date__lte=datetime.datetime.strptime(end_date, '%Y-%m-%d').strftime('%Y%m')) & Q(emp_name=user_emp)
+    edit_attendance_questions = Q(edit_attendance_date__gte=start_date) & Q(edit_attendance_date__lte=end_date) & Q(
+        emp=user_emp)
+    leave_info_questions = Q(end_date__gte=start_date) & Q(start_date__lte=end_date) & Q(emp=user_emp)
     query_key = {'attendance_detail': attendance_detail_questions, 'attendance_summary': attendance_summary_questions,
                  'edit_attendance': edit_attendance_questions, 'leave_info': leave_info_questions, }
     order_key = {'attendance_detail': 'attendance_date', 'attendance_summary': 'section_date',
@@ -850,3 +868,14 @@ def ajax_dict(request):
         date_list.append(one)
         pass
     return JsonResponse(date_list, safe=False)
+
+
+def user_cal(user_emp, start_date, end_date):
+    start_date_tmp = datetime.datetime.strptime(start_date, '%Y-%m-%d').date()
+    end_date_tmp = datetime.datetime.strptime(end_date, '%Y-%m-%d').date()
+    standard_earliest_start_date = (datetime.date.today().replace(day=1) + datetime.timedelta(days=-1)).replace(day=1)
+    if start_date_tmp <= standard_earliest_start_date:
+        start_date_tmp = standard_earliest_start_date
+    if end_date_tmp >= datetime.date.today():
+        end_date_tmp = datetime.date.today()
+    attendance_total_cal((user_emp,), start_date=start_date_tmp, end_date=end_date_tmp)
