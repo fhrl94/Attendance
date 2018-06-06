@@ -785,8 +785,7 @@ def change_pwd(request):
             print(user)
             if user is not None:
                 if user.is_active:
-                    user.set_password(cd['new_pwd1'])
-                    user.save()
+                    user_emp.set_password(cd['new_pwd1'])
                     user_emp.pwd_status = True
                     user_emp.save()
                     return error_404(request, '密码已修改，请重新登录')
