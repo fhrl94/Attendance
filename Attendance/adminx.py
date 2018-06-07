@@ -12,8 +12,8 @@ from Attendance.models import EmployeeInfo, OriginalCard, ShiftsInfo, EmployeeSc
     OriginalCardImport, LegalHoliday, AttendanceTotal
 from Attendance.resources import EmployeeInfoResource, OriginalCardResource, EditAttendanceTypeResource, \
     LeaveTypeResource, EditAttendanceResource, LeaveInfoResource
-from Attendance.views import get_path, loading_data, ShareContext, attendance_total_cal, form_select, attendance_cal, \
-    shift_swap, cal_scheduling_info
+from Attendance.views import get_path, ShareContext, attendance_total_cal, form_select, attendance_cal, \
+    shift_swap, cal_scheduling_info, original_card_import
 
 
 class SelectedShiftsInfoAction(BaseActionView):
@@ -127,21 +127,6 @@ class EmployeeInfoAdmin(object):
     pass
 
 
-@xadmin.sites.register(EmployeeInfoImport)
-class EmployeeInfoImportAdmin(object):
-    actions = ['upload_loading', ]
-
-    def upload_loading(self, request, queryset):
-        path = get_path(queryset)
-        name_list = loading_data(path, EmployeeInfo)
-        if len(name_list):
-            self.message_user("{num}没有导入成功,{name}".format(num=len(name_list),
-                                                          name='、'.join(sorted(set(name_list), key=name_list.index))))
-
-    upload_loading.short_description = '解析文件'
-    pass
-
-
 @xadmin.sites.register(OriginalCard)
 class OriginalCardAdmin(object):
     import_export_args = {'import_resource_class': OriginalCardResource, }
@@ -157,12 +142,13 @@ class OriginalCardAdmin(object):
 @xadmin.sites.register(OriginalCardImport)
 class OriginalCardImportAdmin(object):
     actions = ['upload_loading', ]
+    list_display = ('id', 'path_name', 'upload_time',)
 
     def upload_loading(self, request, queryset):
         path = get_path(queryset)
-        name_list = loading_data(path, OriginalCard)
+        name_list = original_card_import(path)
         if len(name_list):
-            self.message_user("{num}没有导入成功,{name}".format(num=len(name_list),
+            self.message_user("{num}人的考勤没有导入成功,分别是{name}".format(num=len(name_list),
                                                           name='、'.join(sorted(set(name_list), key=name_list.index))))
 
     upload_loading.short_description = '解析文件'

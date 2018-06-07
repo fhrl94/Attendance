@@ -79,70 +79,66 @@ def get_path(queryset):
     pass
 
 
-def loading_data(path, table):
-    """
-    # TODO  待清理
-    读取人员信息、考勤打卡记录
-    :param path:
-    :param table:
-    :return:
-    """
-    name_list = []
-    print(type(table._meta.fields))
-    # 删除以前所有数据
-    # table.objects.all().delete()
+def original_card_import(path):
+    name_err_list = []
+    original_ins_list = []
+    cols_dict = {'emp': '工号', 'attendance_card': '出勤时间'}
+    # excel 对应字段索引
+    table_col_index = {}
+    # 数据结构为 工号：出勤日期
+    original_card_dict = {}
+    # 获取原始打卡excel表实例
     workbook = xlrd.open_workbook(path)
-    exclude_fields = ('id',)
-    # 获取表的【属性】、【中文名称】
-    cols = {f.name: f.verbose_name for f in table._meta.fields if f.name not in exclude_fields}
-    print(cols)
-    table_list = []
-    for count, one in enumerate(workbook.sheet_names()):
-        # TODO 多个sheet，只处理第一个
-        wb_instance = workbook.sheet_by_name(one)
-        table_col_index = {}
-        #  获取首行的列标题，如果需要导入的没有则报错，有则保存列数
-        # 获取所有的标题
-        col_title = [wb_instance.cell_value(0, col) for col in range(wb_instance.ncols)]
-        # 判断列标题没有重复值 （数组去除重复值后，比较数组长度）
-        assert len(sorted(set(col_title), key=col_title.index)) == len(col_title)
-        # 判断是否存在于字典,存在
-        for key, verbose_name in cols.items():
-            try:
-                table_col_index[key] = col_title.index(verbose_name)
-            except ValueError:
-                # UserWarning as err
-                # err.args[0] 获取错误的参数
-                raise UserWarning("列标题不存在", verbose_name)
-        print(table_col_index)
-        # 读取每一行数据，并将其值赋值给 对象
-        for row in range(1, wb_instance.nrows):
-            table_info = table()
-            code_status = None
-            # TODO 根据对应的列进行赋值，检查是否出现问题
-            for col, index in table_col_index.items():
-                try:
-                    setattr(table_info, col, wb_instance.cell_value(row, index))
-                except ValueError:
-                    try:
-                        setattr(table_info, col, EmployeeInfo.objects.get(code=wb_instance.cell_value(row, index)))
-                    except:
-                        #  工号不存在则跳过
-                        code_status = wb_instance.cell_value(row, index)
-                        break  # raise UserWarning("工号不存在", wb_instance.cell_value(row, index))
-            if code_status != None:
-                print(code_status)
-                name_list.append(code_status)
-                continue
-            else:
-                # 设置主键
-                # table_info.pk = row
-                # TODO 进行检查
-                # table_info.check()
-                table_info.clean()
-                table_list.append(table_info)
-        table.objects.bulk_create(table_list)
-    return name_list
+    # 获取 excel表第一个sheet
+    wb_instance = workbook.sheet_by_index(0)
+    # 获取所有的标题
+    col_title = [wb_instance.cell_value(0, col) for col in range(wb_instance.ncols)]
+    # 判断列标题没有重复值 （数组去除重复值后，比较数组长度）
+    assert len(sorted(set(col_title), key=col_title.index)) == len(col_title)
+    # 判断是否存在于字典,存在
+    for key, verbose_name in cols_dict.items():
+        try:
+            table_col_index[key] = col_title.index(verbose_name)
+        except ValueError:
+            # UserWarning as err
+            # err.args[0] 获取错误的参数
+            raise UserWarning("列标题不存在", verbose_name)
+    # 读取每一行数据，并将其值赋值给 对象
+    for row in range(1, wb_instance.nrows):
+        # 获取工号
+        emp_code = wb_instance.cell_value(row, table_col_index['emp'])
+        # 获取 出勤日期
+        emp_attendance_datetime = wb_instance.cell_value(row, table_col_index['attendance_card'])
+        if original_card_dict.get(emp_code) is None:
+            original_card_dict[emp_code] = [emp_attendance_datetime, ]
+        else:
+            original_card_dict[emp_code].append(emp_attendance_datetime)
+    for code, attendance_datetime in original_card_dict.items():
+        try:
+            emp = EmployeeInfo.objects.filter(code=code).get()
+        # 不存在或者不止一个
+        except:
+            #  没有此用户，跳过
+            name_err_list.append(code)
+            continue
+            pass
+        # 导入考勤的最小时间、最大时间
+        start_time = sorted(attendance_datetime)[0]
+        end_time = sorted(attendance_datetime)[-1]
+        # 获取数据库数据
+        original_card_list = get_original_card_list_import(emp, start_time, end_time)
+        # 不重复的记录
+        differ_original = set(attendance_datetime) - set(original_card_list)
+        for one in differ_original:
+            original_ins_list.append(OriginalCard(emp=emp, attendance_card=one))
+    OriginalCard.objects.bulk_create(original_ins_list)
+    return name_err_list
+
+
+def get_original_card_list_import(emp, start_time, end_time):
+    # 获取
+    query_list = Q(emp=emp) & Q(attendance_card__gte=start_time) & Q(attendance_card__lte=end_time)
+    return OriginalCard.objects.filter(query_list).values_list('attendance_card')
 
 
 def date_range(start_date, end_date):
@@ -431,8 +427,8 @@ class ExceptionAttendanceInfo:
                 self.check_in_status = '旷工'
             elif self._time_cal_return_minute(self.check_in, self.shift_info.check_in) <= self.shift_info.late_time:
                 self.check_in_status = '正常'
-            elif (self._time_cal_return_minute(self.check_in,
-                                               self.shift_info.check_in)) > self.shift_info.late_time and (
+            elif (
+            self._time_cal_return_minute(self.check_in, self.shift_info.check_in)) > self.shift_info.late_time and (
                     self._time_cal_return_minute(self.check_in,
                                                  self.shift_info.check_in) <= self.shift_info.absenteeism_time):
                 self.check_in_status = '迟到'
