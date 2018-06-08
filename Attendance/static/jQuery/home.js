@@ -208,7 +208,7 @@ $(document).ready(function(){
             });
         $(".attendance_date_status").each(function(){
                 switch ($(this).text()){
-                    case 'false': $(this).text("节假日");break;
+                    case 'false': $(this).text("节假日");$(this).parent().addClass("active");break;
                     case 'true': $(this).text("工作日");break;
                 }
             });
@@ -252,6 +252,8 @@ $(document).ready(function(){
         $(".check_in_type_id, .check_out_type_id").each(function(){
                 switch ($(this).text()){
                     case '打卡': $(this).text("");break;
+                    default:
+                        $(this).prev().text("")
                 }
             });
     }

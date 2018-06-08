@@ -35,7 +35,7 @@ class EmployeeInfo(User):
         return self.name
 
     class Meta:
-        verbose_name = '员工基础信息'
+        verbose_name = '员工基本信息'
         verbose_name_plural = verbose_name
 
 
@@ -79,7 +79,7 @@ class OriginalCardImport(models.Model):
         return str(self.id)
 
     class Meta:
-        verbose_name = '原始考勤数据导入'
+        verbose_name = '考勤数据导入'
         verbose_name_plural = verbose_name
 
 
@@ -138,7 +138,7 @@ class EmployeeSchedulingInfo(models.Model):
         return str(self.emp)
 
     class Meta:
-        verbose_name = '人员排班信息'
+        verbose_name = '人员排班查看'
         verbose_name_plural = verbose_name
         unique_together = ('emp', 'attendance_date')
 
@@ -154,7 +154,7 @@ class AttendanceExceptionStatus(models.Model):
         return self.exception_name
 
     class Meta:
-        verbose_name = '考勤状态'
+        verbose_name = '考勤状态类型'
         verbose_name_plural = verbose_name
 
 
@@ -177,7 +177,7 @@ class EditAttendanceType(AttendanceExceptionStatus):
     #     super(EditAttendanceType, self).save(*args, **kwargs) # Call the "real" save() method.
 
     class Meta:
-        verbose_name = '签卡原因'
+        verbose_name = '签卡类型'
         verbose_name_plural = verbose_name
 
 # TODO 约束条件应为 edit_attendance_date 中的上午下午不能存在重复值
@@ -203,7 +203,7 @@ class EditAttendance(models.Model):
         attendance_cal((self.emp,), self.edit_attendance_date, self.edit_attendance_date)
 
     class Meta:
-        verbose_name = '签卡信息'
+        verbose_name = '签卡信息维护'
         verbose_name_plural = verbose_name
         unique_together = ('emp', 'edit_attendance_date', 'edit_attendance_status')
 
@@ -265,7 +265,7 @@ class LeaveInfo(models.Model):
             raise UserWarning('开始日期必须要大于结束日期')
 
     class Meta:
-        verbose_name = '请假信息'
+        verbose_name = '假期信息维护'
         verbose_name_plural = verbose_name
 
 
@@ -326,7 +326,7 @@ class AttendanceInfo(models.Model):
         return str(self.emp)
 
     class Meta:
-        verbose_name = '考勤信息'
+        verbose_name = '考勤明细查看'
         verbose_name_plural = verbose_name
         unique_together = ('emp', 'attendance_date')
 
@@ -353,7 +353,7 @@ class AttendanceTotal(models.Model):
     other_leave_total = models.FloatField('其他假天数', )
 
     class Meta:
-        verbose_name = '考勤汇总'
+        verbose_name = '考勤信息汇总'
         verbose_name_plural = verbose_name
         unique_together = ('emp_name', 'section_date')
 
