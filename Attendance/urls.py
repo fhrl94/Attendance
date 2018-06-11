@@ -25,4 +25,5 @@ urlpatterns = [
     url(r'^change_pwd/', view=views.change_pwd, name='change_pwd'),
     url(r'^logout/', view=views.user_logout, name='logout'),
     url(r'^ajax_dict/$', views.ajax_dict, name='ajax_dict'),
+    url(r'^', view=views.error_404, kwargs={'error_body': ''}, name='error_404'),
 ]
