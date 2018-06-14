@@ -11,9 +11,8 @@ from django.shortcuts import render, redirect
 from django.urls import reverse
 
 from Attendance.forms import UserForm, ChangePwdForm
-from Attendance.models import EmployeeInfoImport, OriginalCardImport, EmployeeInfo, EmployeeSchedulingInfo, ShiftsInfo, \
-    LegalHoliday, AttendanceInfo, OriginalCard, AttendanceExceptionStatus, EditAttendance, LeaveInfo, LeaveDetail, \
-    AttendanceTotal
+from Attendance.models import OriginalCardImport, EmployeeInfo, EmployeeSchedulingInfo, ShiftsInfo, LegalHoliday, \
+    AttendanceInfo, OriginalCard, AttendanceExceptionStatus, EditAttendance, LeaveInfo, LeaveDetail, AttendanceTotal
 
 
 # TODO 返回友好型页面，而不是报错
@@ -64,8 +63,8 @@ def get_path(queryset):
     :param queryset:
     :return:
     """
-    # TODO 数据导入，待清理
-    tables = [EmployeeInfoImport, OriginalCardImport]
+    #  数据导入，待清理
+    tables = [OriginalCardImport]
     # 如果选择2个则报错
     # print(len(queryset))
     assert len(queryset) == 1, "只能选择一条记录"
@@ -110,14 +109,13 @@ def original_card_import(path):
         # 获取 出勤日期
         emp_attendance_datetime = wb_instance.cell_value(row, table_col_index['attendance_card'])
         if original_card_dict.get(emp_code) is None:
-            original_card_dict[emp_code] = [emp_attendance_datetime, ]
-        else:
-            original_card_dict[emp_code].append(emp_attendance_datetime)
+            original_card_dict[emp_code] = []
+        original_card_dict[emp_code].append(datetime.datetime.strptime(emp_attendance_datetime, "%Y-%m-%d %H:%M:%S"))
     for code, attendance_datetime in original_card_dict.items():
         try:
             emp = EmployeeInfo.objects.filter(code=code).get()
         # 不存在或者不止一个
-        except:
+        except EmployeeInfo.DoesNotExist:
             #  没有此用户，跳过
             name_err_list.append(code)
             continue
@@ -138,7 +136,7 @@ def original_card_import(path):
 def get_original_card_list_import(emp, start_time, end_time):
     # 获取
     query_list = Q(emp=emp) & Q(attendance_card__gte=start_time) & Q(attendance_card__lte=end_time)
-    return OriginalCard.objects.filter(query_list).values_list('attendance_card')
+    return OriginalCard.objects.filter(query_list).values_list('attendance_card', flat=True)
 
 
 def date_range(start_date, end_date):
@@ -242,9 +240,9 @@ def leave_split(leave_info_ins):
     LeaveDetail.objects.filter(question).delete()
     for attendance_date, shift_name in scheduling_info_dict.items():
         # 假期类型不含节假日
-        if leave_info_ins.leave_type.legal_include == False:
+        if leave_info_ins.leave_type.legal_include is False:
             # 班次为节假日，跳过
-            if shift_info_dict[shift_name].type_shift == False:
+            if shift_info_dict[shift_name].type_shift is False:
                 continue
         leave_detail_ins = LeaveDetail()
         leave_detail_ins.emp = leave_info_ins.emp
@@ -266,20 +264,46 @@ def leave_split(leave_info_ins):
                 raise UserWarning("假期起始时间不正确")
         # 当前日期为结束日期
         if attendance_date == leave_info_ins.end_date:
-            # leave_info_time_end小于 check_in_end 则 结束请假时间为早上
+            # leave_info_time_end 小于 check_in_end 则 结束请假时间为早上
             if leave_info_ins.leave_info_time_end <= shift_info_dict[shift_name].check_in_end:
                 leave_detail_ins.leave_detail_time_end = None
-                if leave_info_ins.start_date != leave_info_ins.end_date:
-                    leave_detail_ins.leave_detail_time_start = leave_info_ins.leave_info_time_end
-            # eave_info_time_end大于 check_out_start 则 结束请假时间为下午
+            # leave_info_time_end 大于 check_out_start 则 结束请假时间为下午
             elif leave_info_ins.leave_info_time_end >= shift_info_dict[shift_name].check_out_start:
                 leave_detail_ins.leave_detail_time_end = leave_info_ins.leave_info_time_end
             else:
                 raise UserWarning("假期结束时间不正确")
         leave_detail_ins.leave_type = leave_info_ins.leave_type
         leave_detail_ins.leave_info_status = leave_info_ins.leave_info_status
+        #  判断是否有重复单据
+        leave_info_distinct(leave_detail_ins)
         leave_detail_ins_list.append(leave_detail_ins)
     return leave_detail_ins_list
+
+
+def leave_info_distinct(leave_detail_ins_tmp):
+    assert isinstance(leave_detail_ins_tmp, LeaveDetail), "使用错误，不是请假明细实例"
+    query_list = Q(emp=leave_detail_ins_tmp.emp) & Q(leave_date=leave_detail_ins_tmp.leave_date) & Q(
+        leave_info_status=leave_detail_ins_tmp.leave_info_status)
+    leave_detail_ins_list = LeaveDetail.objects.filter(query_list)
+    attendance_date = {}
+    for one in leave_detail_ins_list:
+        if one.leave_detail_time_start is not None:
+            if attendance_date.get('leave_detail_time_start') is None:
+                attendance_date['leave_detail_time_start'] = one.leave_detail_time_start
+            else:
+                raise UserWarning("上午存在重复记录")
+        if one.leave_detail_time_end is not None:
+            if attendance_date.get('leave_detail_time_end') is None:
+                attendance_date['leave_detail_time_end'] = one.leave_detail_time_end
+            else:
+                raise UserWarning("下午存在重复记录")
+        if attendance_date.get(
+                'leave_detail_time_start') is not None and leave_detail_ins_tmp.leave_detail_time_start is not None:
+            raise UserWarning("存在重复记录，已有{date}上午的签卡单".format(date=leave_detail_ins_tmp.leave_date))
+        if attendance_date.get(
+                'leave_detail_time_end') is not None and leave_detail_ins_tmp.leave_detail_time_end is not None:
+            raise UserWarning("存在重复记录，已有{date}下午的签卡单".format(date=leave_detail_ins_tmp.leave_date))
+        pass  # if len(leave_detail_ins_list) == 2:  # raise UserWarning("存在重复记录")  # elif len(leave_detail_ins_list) == 1:  # leave_detail_ins = leave_detail_ins_list[0]  # if leave_detail_ins.leave_detail_time_start is not None and leave_detail_ins.leave_detail_time_end is not None:  # raise UserWarning("{date}全天存在重复记录".format(date=leave_detail_ins.leave_date))  # else:  # if leave_detail_ins.leave_detail_time_start is not None and leave_detail_ins_tmp.leave_detail_time_start is not None:  # raise UserWarning("{date}上午存在重复记录".format(date=leave_detail_ins.leave_date))  # if leave_detail_ins.leave_detail_time_end is not None and leave_detail_ins_tmp.leave_detail_time_end is not None:  # raise UserWarning("{date}下午存在重复记录".format(date=leave_detail_ins.leave_date))  # pass  # elif len(leave_detail_ins_list) == 0:  # pass  # else:  # raise UserWarning("出现异常，联系管理员")  # pass
 
 
 # TODO 出差可以参考这个
@@ -317,6 +341,34 @@ def get_shift_info_dict():
     pass
 
 
+def edit_attendance_distinct(edit_attendance_tmp):
+    assert isinstance(edit_attendance_tmp, EditAttendance), "使用错误，不是签卡实例"
+    question = Q(emp=edit_attendance_tmp.emp) & Q(
+        edit_attendance_date__gte=edit_attendance_tmp.edit_attendance_date) & Q(
+        edit_attendance_date__lte=edit_attendance_tmp.edit_attendance_date)
+    edit_attendance_list = EditAttendance.objects.filter(question).all().order_by('edit_attendance_date')
+    attendance_date = {}
+    for one in edit_attendance_list:
+        if one.edit_attendance_time_start is not None:
+            if attendance_date.get('edit_attendance_time_start') is None:
+                attendance_date['edit_attendance_time_start'] = one.edit_attendance_time_start
+            else:
+                raise UserWarning("上午存在重复记录")
+        if one.edit_attendance_time_end is not None:
+            if attendance_date.get('edit_attendance_time_end') is None:
+                attendance_date['edit_attendance_time_end'] = one.edit_attendance_time_end
+            else:
+                raise UserWarning("下午存在重复记录")
+        if attendance_date.get(
+                'edit_attendance_time_start') is not None and edit_attendance_tmp.edit_attendance_time_start is not None:
+            raise UserWarning("存在重复记录，已有当天上午的签卡单")
+        if attendance_date.get(
+                'edit_attendance_time_end') is not None and edit_attendance_tmp.edit_attendance_time_end is not None:
+            raise UserWarning("存在重复记录，已有当天天下午的签卡单")
+        pass
+    pass
+
+
 #  获取有效的签卡信息
 def get_edit_attendance_dict(emp_one, start_date, end_date):
     assert isinstance(emp_one, EmployeeInfo), "emp 不是 EmployeeInfo 对象"
@@ -325,7 +377,24 @@ def get_edit_attendance_dict(emp_one, start_date, end_date):
         edit_attendance_date__lte=end_date) & Q(edit_attendance_status='1')
     edit_attendance_list = EditAttendance.objects.filter(question).all().order_by('edit_attendance_date')
     for one in edit_attendance_list:
-        edit_attendance_dict[one.edit_attendance_date] = one
+        # edit_attendance_dict[one.edit_attendance_date] = one
+        if edit_attendance_dict.get(one.edit_attendance_date) is None:
+            edit_attendance_dict[one.edit_attendance_date] = {}
+        edit_attendance_date = edit_attendance_dict[one.edit_attendance_date]
+        if one.edit_attendance_time_start is not None:
+            if edit_attendance_date.get('edit_attendance_time_start') is None:
+                edit_attendance_date['edit_attendance_time_start'] = one.edit_attendance_time_start
+                edit_attendance_date['edit_attendance_time_start_type'] = one.edit_attendance_type
+            else:
+                raise UserWarning("存在重复记录-{name}的{attendance_date}存在重复的签卡数据".format(name=one.emp.name,
+                                                                                    attendance_date=one.edit_attendance_date))
+        if one.edit_attendance_time_end is not None:
+            if edit_attendance_date.get('edit_attendance_time_end') is None:
+                edit_attendance_date['edit_attendance_time_end'] = one.edit_attendance_time_end
+                edit_attendance_date['edit_attendance_time_end_type'] = one.edit_attendance_type
+            else:
+                raise UserWarning("存在重复记录-{name}的{attendance_date}存在重复的签卡数据".format(name=one.emp.name,
+                                                                                    attendance_date=one.edit_attendance_date))
     return edit_attendance_dict
 
 
@@ -343,7 +412,23 @@ def get_leave_detail_dict(emp_one, start_date, end_date):
         leave_info_status='1')
     leave_detail_list = LeaveDetail.objects.filter(question).all().order_by('leave_date')
     for one in leave_detail_list:
-        leave_detail_dict[one.leave_date] = one
+        # leave_detail_dict[one.leave_date] = one
+        if leave_detail_dict.get(one.leave_date) is None:
+            leave_detail_dict[one.leave_date] = {}
+        if one.leave_detail_time_start is not None:
+            if leave_detail_dict[one.leave_date].get('leave_detail_time_start') is None:
+                leave_detail_dict[one.leave_date]['leave_detail_time_start'] = one.leave_detail_time_start
+                leave_detail_dict[one.leave_date]['leave_detail_time_start_type'] = one.leave_type
+            else:
+                raise UserWarning("存在重复记录-{name}的{attendance_date}存在重复的请假数据".format(name=one.emp.name,
+                                                                                    attendance_date=one.leave_date))
+        if one.leave_detail_time_end is not None:
+            if leave_detail_dict[one.leave_date].get('leave_detail_time_end') is None:
+                leave_detail_dict[one.leave_date]['leave_detail_time_end'] = one.leave_detail_time_end
+                leave_detail_dict[one.leave_date]['leave_detail_time_end_type'] = one.leave_type
+            else:
+                raise UserWarning("存在重复记录-{name}的{attendance_date}存在重复的请假数据".format(name=one.emp.name,
+                                                                                    attendance_date=one.leave_date))
     return leave_detail_dict
 
 
@@ -357,13 +442,15 @@ def get_original_card_dict(emp_one, start_date, end_date):
     original_card_dict_list = OriginalCard.objects.filter(question).all().order_by('attendance_card').values()
     for one in original_card_dict_list:
         # 嵌套字典 【打卡日期】-【Min/Max】：打卡时间 (emp_attendance)
-        if original_card_dict.get(one['attendance_card'].date()) == None:
+        if original_card_dict.get(one['attendance_card'].date()) is None:
             original_card_dict[one['attendance_card'].date()] = {}
             # 排序过，当天最小值，第一次赋值
             original_card_dict[one['attendance_card'].date()]['min'] = one['attendance_card'].time()
-        emp_attendance = original_card_dict[one['attendance_card'].date()]
-        # 排序过，最后一次赋值，是当天最大值
-        emp_attendance['max'] = one['attendance_card'].time()
+        else:
+            emp_attendance = original_card_dict[one['attendance_card'].date()]
+            # 排序过，最后一次赋值，是当天最大值
+            # 第一次赋值 min ，不赋值给 max
+            emp_attendance['max'] = one['attendance_card'].time()
         pass
     return original_card_dict
     pass
@@ -420,15 +507,18 @@ class ExceptionAttendanceInfo:
         pass
 
     def _save(self):
-        if self.shift_info.type_shift == False:
+        # 节假日判断
+        if self.shift_info.type_shift is False:
+            self.check_out_status = '正常'
             self.check_in_status = '正常'
         else:
-            if self.check_in == None:
+            # 上午判定
+            if self.check_in is None:
                 self.check_in_status = '旷工'
             elif self._time_cal_return_minute(self.check_in, self.shift_info.check_in) <= self.shift_info.late_time:
                 self.check_in_status = '正常'
-            elif (
-            self._time_cal_return_minute(self.check_in, self.shift_info.check_in)) > self.shift_info.late_time and (
+            elif (self._time_cal_return_minute(self.check_in,
+                                               self.shift_info.check_in)) > self.shift_info.late_time and (
                     self._time_cal_return_minute(self.check_in,
                                                  self.shift_info.check_in) <= self.shift_info.absenteeism_time):
                 self.check_in_status = '迟到'
@@ -437,13 +527,9 @@ class ExceptionAttendanceInfo:
                     self._time_cal_return_minute(self.check_in, self.shift_info.check_in_end) <= 0):
                 self.check_in_status = '旷工'
             elif self._time_cal_return_minute(self.check_in, self.shift_info.check_in_end) > 0:
-                self.check_in = None
                 self.check_in_status = '旷工'
-                pass
-        if self.shift_info.type_shift == False:
-            self.check_out_status = '正常'
-        else:
-            if self.check_out == None:
+            # 下午判定
+            if self.check_out is None:
                 self.check_out_status = '旷工'
             elif self._time_cal_return_minute(self.shift_info.check_out,
                                               self.check_out) <= self.shift_info.leave_early_time:
@@ -458,9 +544,8 @@ class ExceptionAttendanceInfo:
                     self._time_cal_return_minute(self.shift_info.check_out_start, self.check_out) <= 0):
                 self.check_out_status = '旷工'
             elif self._time_cal_return_minute(self.shift_info.check_out_start, self.check_out) > 0:
-                self.check_out = None
                 self.check_out_status = '旷工'
-                pass
+        # 全天判断
         if self.check_in_status == '正常' and self.check_out_status == '正常':
             self.check_status = False
         else:
@@ -497,7 +582,8 @@ def attendance_cal(emp_queryset, start_date, end_date):
     # 考勤数据列表
     attendance_info_list = []
     # 获取打卡的实例
-    attendance_exception_status_card = AttendanceExceptionStatus.objects.get(exception_name='打卡')
+    attendance_exception_status_card_normal = AttendanceExceptionStatus.objects.get(exception_name='打卡')
+    attendance_exception_status_card_exception = AttendanceExceptionStatus.objects.get(exception_name='未打卡')
     for emp in emp_queryset:
         # 删除已存在的
         question = Q(emp=emp) & Q(attendance_date__gte=start_date) & Q(attendance_date__lte=end_date)
@@ -514,33 +600,33 @@ def attendance_cal(emp_queryset, start_date, end_date):
         # print(scheduling_info_dict, edit_attendance_dict, leave_detail_dict, original_card_dict)
         for date, shift_name in scheduling_info_dict.items():
             check_in = None
-            check_in_type = attendance_exception_status_card
+            check_in_type = attendance_exception_status_card_exception
             check_out = None
-            check_out_type = attendance_exception_status_card
+            check_out_type = attendance_exception_status_card_exception
             # 先打卡检索
             if original_card_dict.get(date):
                 if original_card_dict.get(date).get('min'):
                     check_in = original_card_dict.get(date).get('min')
-                    check_in_type = attendance_exception_status_card
+                    check_in_type = attendance_exception_status_card_normal
                 if original_card_dict.get(date).get('max'):
                     check_out = original_card_dict.get(date).get('max')
-                    check_out_type = attendance_exception_status_card
+                    check_out_type = attendance_exception_status_card_normal
             # 检索签卡，如果有，覆盖
             if edit_attendance_dict.get(date):
-                if edit_attendance_dict.get(date).edit_attendance_time_start != None:
-                    check_in = edit_attendance_dict.get(date).edit_attendance_time_start
-                    check_in_type = edit_attendance_dict.get(date).edit_attendance_type
-                if edit_attendance_dict.get(date).edit_attendance_time_end != None:
-                    check_out = edit_attendance_dict.get(date).edit_attendance_time_end
-                    check_out_type = edit_attendance_dict.get(date).edit_attendance_type
+                if edit_attendance_dict.get(date).get('edit_attendance_time_start') is not None:
+                    check_in = edit_attendance_dict.get(date)['edit_attendance_time_start']
+                    check_in_type = edit_attendance_dict.get(date)['edit_attendance_time_start_type']
+                if edit_attendance_dict.get(date).get('edit_attendance_time_end') is not None:
+                    check_out = edit_attendance_dict.get(date)['edit_attendance_time_end']
+                    check_out_type = edit_attendance_dict.get(date)['edit_attendance_time_end_type']
             # 检索请假， 如果有，覆盖
             if leave_detail_dict.get(date):
-                if leave_detail_dict.get(date).leave_detail_time_start != None:
-                    check_in = leave_detail_dict.get(date).leave_detail_time_start
-                    check_in_type = leave_detail_dict.get(date).leave_type
-                if leave_detail_dict.get(date).leave_detail_time_end != None:
-                    check_out = leave_detail_dict.get(date).leave_detail_time_end
-                    check_out_type = leave_detail_dict.get(date).leave_type
+                if leave_detail_dict.get(date).get('leave_detail_time_start') is not None:
+                    check_in = leave_detail_dict.get(date)['leave_detail_time_start']
+                    check_in_type = leave_detail_dict.get(date)['leave_detail_time_start_type']
+                if leave_detail_dict.get(date).get('leave_detail_time_end') is not None:
+                    check_out = leave_detail_dict.get(date)['leave_detail_time_end']
+                    check_out_type = leave_detail_dict.get(date)['leave_detail_time_end_type']
             attendance_info_tmp = ExceptionAttendanceInfo(emp=emp, attendance_date=date, check_in=check_in,
                                                           check_out=check_out, check_in_type=check_in_type,
                                                           check_out_type=check_out_type,
@@ -598,13 +684,13 @@ def attendance_total_cal_sum(emp, start_date, attendance_info_dict_list):
         # 统计假期
         # print(one)
         # print(one.get('check_in_type_id'), leave_dict.get(one.get('check_in_type_id'))!= None)
-        if leave_dict.get(one.get('check_in_type_id')) != None:
+        if leave_dict.get(one.get('check_in_type_id')) is not None:
             leave_dict[one.get('check_in_type_id')] += 1
         # 实到天数 real_arrive_total 非请假的所有出勤天数
         elif one.get('attendance_date_status'):
             if one.get('check_in_status') != '3':
                 real_arrive_total = real_arrive_total + 1
-        if leave_dict.get(one.get('check_out_type_id')) != None:
+        if leave_dict.get(one.get('check_out_type_id')) is not None:
             leave_dict[one.get('check_out_type_id')] = leave_dict[one.get('check_out_type_id')] + 1
         # 实到天数 real_arrive_total 非请假的所有出勤天数
         elif one.get('attendance_date_status'):
@@ -760,7 +846,7 @@ def home_form(request):
     #  查询考勤数据 ,并返回结果 使用 ajax_dict 查询数据时，进行自动计算
     print(user.id)
     user_emp = EmployeeInfo.objects.filter(user_ptr_id=user.id).get()
-    if user_emp.pwd_status != True:
+    if user_emp.pwd_status is False:
         return change_pwd(request)
     # 使用 js 来处理
     return render(request, template_name='Attendance/home.html', context={'user_emp': user_emp, })
@@ -794,7 +880,7 @@ def change_pwd(request):
                           context={'form': form, 'error': "2次密码不一致"})
     else:
         form = ChangePwdForm()
-    if user_emp.pwd_status != True:
+    if user_emp.pwd_status is False:
         error_str = "首次登录，请修改密码"
     else:
         error_str = None

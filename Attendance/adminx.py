@@ -6,14 +6,14 @@ from xadmin.plugins.actions import BaseActionView
 from xadmin.plugins.utils import get_context_dict
 from xadmin.views import CommAdminView, BaseAdminPlugin
 
-from Attendance.forms import DateSelectForm, ShiftsInfoDateForm
+from Attendance.forms import DateSelectForm, ShiftsInfoDateForm, EditAttendanceForm, LeaveInfoForm
 from Attendance.models import EmployeeInfo, OriginalCard, ShiftsInfo, EmployeeSchedulingInfo, EditAttendanceType, \
-    EditAttendance, LeaveType, LeaveInfo, AttendanceExceptionStatus, AttendanceInfo, EmployeeInfoImport, \
-    OriginalCardImport, LegalHoliday, AttendanceTotal
+    EditAttendance, LeaveType, LeaveInfo, AttendanceExceptionStatus, AttendanceInfo, OriginalCardImport, LegalHoliday, \
+    AttendanceTotal
 from Attendance.resources import EmployeeInfoResource, OriginalCardResource, EditAttendanceTypeResource, \
     LeaveTypeResource, EditAttendanceResource, LeaveInfoResource
-from Attendance.views import get_path, ShareContext, attendance_total_cal, form_select, attendance_cal, \
-    shift_swap, cal_scheduling_info, original_card_import
+from Attendance.views import get_path, ShareContext, attendance_total_cal, form_select, attendance_cal, shift_swap, \
+    cal_scheduling_info, original_card_import
 
 
 class SelectedShiftsInfoAction(BaseActionView):
@@ -132,7 +132,7 @@ class OriginalCardAdmin(object):
     import_export_args = {'import_resource_class': OriginalCardResource, }
     model = OriginalCard
     list_display = ('emp', 'attendance_card',)
-    # list_filter = ('level', 'emp_status', )
+    list_filter = ('emp__level', 'emp__emp_status', 'attendance_card')
     search_fields = ('emp__code', 'emp__name',)
     date_hierarchy = 'attendance_card'
 
@@ -148,8 +148,8 @@ class OriginalCardImportAdmin(object):
         path = get_path(queryset)
         name_list = original_card_import(path)
         if len(name_list):
-            self.message_user("{num}人的考勤没有导入成功,分别是{name}".format(num=len(name_list),
-                                                          name='、'.join(sorted(set(name_list), key=name_list.index))))
+            self.message_user("{num}人的考勤没有导入成功,分别是{name}".format(num=len(name_list), name='、'.join(
+                sorted(set(name_list), key=name_list.index))))
 
     upload_loading.short_description = '解析文件'
     pass
@@ -195,6 +195,13 @@ class EditAttendanceAdmin(object):
         'edit_attendance_status')
     list_filter = ('edit_attendance_type',)
     search_fields = ('emp__code', 'emp__name')
+    form = EditAttendanceForm
+
+    # def save_models(self):
+    #     try:
+    #         self.new_obj.save()
+    #     except UserWarning:
+    #         self.message_user('保存失败，原因为：{err}'.format(err=sys.exc_info()[1]),level='error',)
 
     pass
 
@@ -212,6 +219,7 @@ class LeaveInfoAdmin(object):
     'emp', 'start_date', 'leave_info_time_start', 'end_date', 'leave_info_time_end', 'leave_type', 'leave_info_status',)
     list_filter = ('leave_type',)
     search_fields = ('emp__code', 'emp__name')
+    form = LeaveInfoForm
     pass
 
 

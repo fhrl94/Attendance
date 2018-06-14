@@ -150,11 +150,20 @@ $(document).ready(function(){
         }
         $("#num_query").empty();
         $("#num_query").text("共查到 " + date_dict_list.length + " 条记录");
-        if (title_type !== 'attendance_detail'){
-            $('#content_filter_label').addClass("hidden");
-        }
-        else {
-            $('#content_filter_label').removeClass("hidden");
+        switch (title_type){
+            case 'attendance_detail':
+                $('#content_filter_label').removeClass("hidden");
+                $('#tips_attendance_detail').removeClass("hidden");
+                $('#tips_attendance_summary').addClass("hidden");
+                break;
+            case 'attendance_summary':
+                $('#tips_attendance_summary').removeClass("hidden");
+                $('#tips_attendance_detail').addClass("hidden");
+                $('#content_filter_label').addClass("hidden");break;
+            default:
+                $('#content_filter_label').addClass("hidden");
+                $('#tips_attendance_detail').addClass("hidden");
+                $('#tips_attendance_summary').addClass("hidden");
         }
         translate_data();
         filter_attendance_info();
@@ -168,8 +177,8 @@ $(document).ready(function(){
     // 变量申明
     var title_type;
     var attendance_detail_title_dict = {'emp_id': '工号', 'attendance_date': '考勤日期', 'check_in':'上午打卡时间',
-        'check_in_type_id': '上午出勤状态', 'check_in_status': '上午是否异常', 'check_out': '下午打卡时间',
-        'check_out_type_id': '下午出勤状态', 'check_out_status': '下午是否异常', 'check_status': '全天是否有异常',
+        'check_in_type_id': '上午出勤情况', 'check_in_status': '上午是否异常', 'check_out': '下午打卡时间',
+        'check_out_type_id': '下午出勤情况', 'check_out_status': '下午是否异常', 'check_status': '全天是否有异常',
         'attendance_date_status': '是否工作日'};
     var attendance_summary_title_dict = {'emp_code': '工号', 'section_date': '汇总日期', 'arrive_total': '应到天数',
         'real_arrive_total': '实到天数', 'absenteeism_total': '旷工天数', 'late_total': '迟到/早退次数',
@@ -192,6 +201,7 @@ $(document).ready(function(){
 
     // 翻译数据
     function translate_data() {
+        // 全天是否有异常
         $(".check_in_status, .check_out_status").each(function(){
                 switch ($(this).text()){
                     case '0': $(this).text("正常");break;
@@ -200,23 +210,30 @@ $(document).ready(function(){
                     case '3': $(this).text("旷工");break;
                 }
             });
+        // 全天是否异常
         $(".check_status").each(function(){
                 switch ($(this).text()){
                     case 'false': $(this).text("否");break;
                     case 'true': $(this).text("异常");break;
                 }
             });
+        // 是否工作日
         $(".attendance_date_status").each(function(){
                 switch ($(this).text()){
-                    case 'false': $(this).text("节假日");$(this).parent().addClass("active");break;
+                    case 'false':
+                        $(this).text("节假日");
+                        $(this).parent().addClass("active");
+                        break;
                     case 'true': $(this).text("工作日");break;
                 }
             });
+        // 时间为 null 替换为 ""
         $(".check_in, .check_out, .edit_attendance_time_start, .edit_attendance_time_end").each(function(){
                 switch ($(this).text()){
                     case 'null': $(this).text("");break;
                 }
             });
+        // 请假、签卡单据状态
         $(".edit_attendance_status, .leave_info_status").each(function(){
                 switch ($(this).text()){
                     case '0': $(this).text("未使用");break;
@@ -224,6 +241,7 @@ $(document).ready(function(){
                     case '2': $(this).text("已失效");break;
                 }
             });
+        // 请假、签卡单据原因
         $(".leave_type_id, .edit_attendance_type_id").each(function(){
                 switch ($(this).text()){
                     // case '1': $(this).text('打卡');break;
@@ -249,9 +267,20 @@ $(document).ready(function(){
                     case '21': $(this).text('探亲假');break;
                 }
             });
+        // 出勤状况
         $(".check_in_type_id, .check_out_type_id").each(function(){
                 switch ($(this).text()){
-                    case '打卡': $(this).text("");break;
+                    case '打卡': break;
+                    case '未打卡': break;
+                    case '见客户': break;
+                    case '参会': break;
+                    case '因公外出': break;
+                    case '查监控忘打卡': break;
+                    case '查监控已打卡': break;
+                    case '班车迟到': break;
+                    case '特批': break;
+                    case '出差': break;
+                    case '其他': break;
                     default:
                         $(this).prev().text("")
                 }

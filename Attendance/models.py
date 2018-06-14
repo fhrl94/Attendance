@@ -1,10 +1,9 @@
-import sys
-
 import datetime
+import sys
 
 from django.contrib.auth.models import User
 from django.core.validators import RegexValidator
-from django.db import models, IntegrityError
+from django.db import models
 
 # Create your models here.
 
@@ -36,21 +35,6 @@ class EmployeeInfo(User):
 
     class Meta:
         verbose_name = '员工基本信息'
-        verbose_name_plural = verbose_name
-
-
-class EmployeeInfoImport(models.Model):
-    # 表的结构:
-    # path_name = models.FileField('文件名称', upload_to=sys.path[0] + '/upload/%Y_%m_%d/%H', )
-    path_name = models.FileField('文件名称', upload_to=user_directory_path, )
-    #  获取现在的时间
-    upload_time = models.DateTimeField('上传时间', unique=True, auto_now=True)
-
-    def __str__(self):
-        return str(self.id)
-
-    class Meta:
-        verbose_name = '人员信息导入'
         verbose_name_plural = verbose_name
 
 
@@ -180,7 +164,7 @@ class EditAttendanceType(AttendanceExceptionStatus):
         verbose_name = '签卡类型'
         verbose_name_plural = verbose_name
 
-# TODO 约束条件应为 edit_attendance_date 中的上午下午不能存在重复值
+#  约束条件应为 edit_attendance_date 中的上午下午不能存在重复值
 class EditAttendance(models.Model):
     emp = models.ForeignKey(EmployeeInfo, to_field='code', on_delete=models.CASCADE, verbose_name='工号')
     edit_attendance_date = models.DateField('签卡日期')
@@ -198,14 +182,19 @@ class EditAttendance(models.Model):
         return str(self.emp)
 
     def save(self, *args, **kwargs):
+        if (EditAttendance.objects.get(pk=self.pk) == self) is False:
+            # 需要先验证，才能选择是否保存
+            from Attendance.views import edit_attendance_distinct
+            edit_attendance_distinct(self)
         super(EditAttendance, self).save(*args, **kwargs)  # Call the "real" save() method.
+        # 自动计算
         from Attendance.views import attendance_cal
         attendance_cal((self.emp,), self.edit_attendance_date, self.edit_attendance_date)
 
     class Meta:
         verbose_name = '签卡信息维护'
         verbose_name_plural = verbose_name
-        unique_together = ('emp', 'edit_attendance_date', 'edit_attendance_status')
+        # unique_together = ('emp', 'edit_attendance_date', 'edit_attendance_status')
 
 
 # 5. 请假（请假单、请假拆分）
@@ -239,9 +228,9 @@ class LeaveInfo(models.Model):
     # 表的结构:
     emp = models.ForeignKey(EmployeeInfo, to_field='code', on_delete=models.CASCADE, verbose_name='工号')
     start_date = models.DateField('开始日期')
-    leave_info_time_start = models.TimeField('开始请假时间', )
+    leave_info_time_start = models.TimeField('请假开始时间', )
     end_date = models.DateField('结束日期')
-    leave_info_time_end = models.TimeField('结束请假时间', )
+    leave_info_time_end = models.TimeField('请假结束时间', )
     leave_type = models.ForeignKey(LeaveType, on_delete=models.CASCADE, to_field='attendanceexceptionstatus_ptr',
                                    limit_choices_to={'exception_status': '1'}, verbose_name='假期类型')
     leave_info_status = models.CharField('假期单据状态', max_length=2, choices=status_choice)
@@ -254,13 +243,18 @@ class LeaveInfo(models.Model):
     def save(self, *args, **kwargs):
         #
         if self.start_date <= self.end_date:
-            try:
+            # try:
+            if (LeaveInfo.objects.get(pk=self.pk) == self) is False:
                 super(LeaveInfo, self).save(*args, **kwargs)  # Call the "real" save() method.
-                from Attendance.views import attendance_cal
-                attendance_cal((self.emp,), self.start_date, self.end_date)
-            except IntegrityError:
-                raise UserWarning('无效')
-                pass
+                # 保存之后才能拆分
+                # 拆分单据，有重复则报错
+                from Attendance.views import leave_split_cal
+                leave_split_cal((self,))
+                # 自动计算
+            from Attendance.views import attendance_cal
+            attendance_cal((self.emp,), self.start_date, self.end_date)
+            # except IntegrityError:
+            #     raise UserWarning('无效')
         else:
             raise UserWarning('开始日期必须要大于结束日期')
 
@@ -276,7 +270,7 @@ class LeaveDetail(models.Model):
     leave_detail_time_start = models.TimeField('上午请假时间', null=True, blank=True)
     leave_detail_time_end = models.TimeField('下午请假时间', null=True, blank=True)
     leave_type = models.ForeignKey(LeaveType, to_field='exception_name', on_delete=models.CASCADE, verbose_name='假期类型')
-    leave_info_status = models.CharField('假期单据状态', max_length=2, choices=status_choice)
+    leave_info_status = models.CharField('假期明细单据状态', max_length=2, choices=status_choice)
     leave_detail_operate = models.DateTimeField('假期明细操作日期', auto_now=True)
 
     def __str__(self):
@@ -285,8 +279,8 @@ class LeaveDetail(models.Model):
     class Meta:
         verbose_name = '假期明细'
         verbose_name_plural = verbose_name
-        # TODO 约束条件应为 leave_date 中的上午下午不能存在重复值
-        unique_together = ('emp', 'leave_date', 'leave_info_status')
+        #  约束条件应为 leave_date 中的上午下午不能存在重复值
+        # unique_together = ('emp', 'leave_date', 'leave_info_status')
 
     pass
 
@@ -314,8 +308,8 @@ class AttendanceInfo(models.Model):
                                       verbose_name='上班打卡状态', related_name='check_in_type')
     check_out_type = models.ForeignKey(AttendanceExceptionStatus, to_field='exception_name', on_delete=models.CASCADE,
                                        verbose_name='下班打卡状态', related_name='check_out_type')
-    check_in_status = models.CharField(verbose_name='上午考勤状态', max_length=1, choices=check_status_choice)
-    check_out_status = models.CharField(verbose_name='下午考勤状态', max_length=1, choices=check_status_choice)
+    check_in_status = models.CharField(verbose_name='上午出勤情况', max_length=1, choices=check_status_choice)
+    check_out_status = models.CharField(verbose_name='下午出勤情况', max_length=1, choices=check_status_choice)
     check_status = models.BooleanField('是否异常')
     attendance_date_status = models.BooleanField('是否工作日')
 

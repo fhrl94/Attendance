@@ -1,5 +1,7 @@
+import sys
 from django import forms
-from django.db.utils import OperationalError
+
+from Attendance.models import EditAttendance, LeaveInfo
 
 
 class DateSelectForm(forms.Form):
@@ -28,8 +30,7 @@ class ShiftsInfoDateForm(forms.Form):
         attrs={'class': 'form-control', 'placeholder': '结束时间', 'type': 'date', 'id': 'end_time', },
         format='%Y-%m-%d', ))
     shifts_name = forms.ChoiceField(label=u"选择班次名称", widget=forms.Select(
-        attrs={'class': 'form-control', 'placeholder': '选择班次名称', 'id': 'shifts_name', }),
-                                    choices=[("", "—请选择—")])
+        attrs={'class': 'form-control', 'placeholder': '选择班次名称', 'id': 'shifts_name', }), choices=[("", "—请选择—")])
 
     def __init__(self, *args, **kwargs):
         super(ShiftsInfoDateForm, self).__init__(*args, **kwargs)
@@ -62,3 +63,43 @@ class ChangePwdForm(forms.Form):
         else:
             cleaned_data = super(ChangePwdForm, self).clean()
         return cleaned_data
+
+
+class EditAttendanceForm(forms.ModelForm):
+    class Meta:
+        model = EditAttendance
+        fields = '__all__'
+
+    def clean(self):
+        super(EditAttendanceForm, self).clean()
+        try:
+            EditAttendance.objects.get(**self.cleaned_data)
+        except EditAttendance.DoesNotExist:
+            try:
+                from Attendance.views import edit_attendance_distinct
+                edit_attendance_distinct(EditAttendance(**self.cleaned_data))
+            except UserWarning:
+                raise forms.ValidationError('保存失败，原因为：{err}'.format(err=sys.exc_info()[1]))
+            pass
+
+    pass
+
+
+class LeaveInfoForm(forms.ModelForm):
+    class Meta:
+        model = LeaveInfo
+        fields = '__all__'
+
+    def clean(self):
+        super(LeaveInfoForm, self).clean()
+        try:
+            LeaveInfo.objects.get(**self.cleaned_data)
+        except LeaveInfo.DoesNotExist:
+            try:
+                from Attendance.views import leave_split
+                leave_split(LeaveInfo(**self.cleaned_data))
+            except UserWarning:
+                raise forms.ValidationError('保存失败，原因为：{err}'.format(err=sys.exc_info()[1]))
+            pass
+
+    pass

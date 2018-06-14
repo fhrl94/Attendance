@@ -2,7 +2,7 @@ from django.contrib import admin
 
 # Register your models here.
 from Attendance.models import EmployeeInfo, OriginalCard, ShiftsInfo, EmployeeSchedulingInfo, EditAttendanceType, \
-    EditAttendance, LeaveType, LeaveInfo, AttendanceExceptionStatus, AttendanceInfo, EmployeeInfoImport, \
+    EditAttendance, LeaveType, LeaveInfo, AttendanceExceptionStatus, AttendanceInfo, \
     OriginalCardImport
 from Attendance.views import get_path, original_card_import
 

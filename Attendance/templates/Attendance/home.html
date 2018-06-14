@@ -1,5 +1,9 @@
 {% extends 'Attendance/home_base.html' %}
 {% block content_list %}
+    <div class="alert alert-info">
+        欢迎
+        &nbsp; <h4 class="glyphicon glyphicon-user" style="display: inline">{{user_emp.name}}</h4>&nbsp;
+        登录！查看到考勤异常及时处理哟~</div>
     <div class="panel panel-primary">
         <div class="panel-heading">
             <h3 class="panel-title" id="criteria_title">
@@ -22,6 +26,8 @@
                 <label id="content_filter_label">
                     <input type="checkbox" id="content_filter" checked="checked"> 只显示异常
                 </label>
+                <p id="tips_attendance_detail"><strong>温馨提示：今天的考勤信息明天才能查到哟~</strong></p>
+                <p id="tips_attendance_summary"><strong>温馨提示：截止到今天的考勤汇总，明天才能查到哟~</strong></p>
             </div>
             <table class="table table-responsive table-bordered table-hover text-center">
                 <thead id="table_title" class="text-center">
