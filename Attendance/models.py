@@ -182,7 +182,12 @@ class EditAttendance(models.Model):
         return str(self.emp)
 
     def save(self, *args, **kwargs):
-        if (EditAttendance.objects.get(pk=self.pk) == self) is False:
+        try:
+            if (EditAttendance.objects.get(pk=self.pk) == self) is False:
+                # 需要先验证，才能选择是否保存
+                from Attendance.views import edit_attendance_distinct
+                edit_attendance_distinct(self)
+        except EditAttendance.DoesNotExist:
             # 需要先验证，才能选择是否保存
             from Attendance.views import edit_attendance_distinct
             edit_attendance_distinct(self)
@@ -243,14 +248,20 @@ class LeaveInfo(models.Model):
     def save(self, *args, **kwargs):
         #
         if self.start_date <= self.end_date:
-            # try:
-            if (LeaveInfo.objects.get(pk=self.pk) == self) is False:
+            try:
+                if (LeaveInfo.objects.get(pk=self.pk) == self) is False:
+                    super(LeaveInfo, self).save(*args, **kwargs)  # Call the "real" save() method.
+                    # 保存之后才能拆分
+                    # 拆分单据，有重复则报错
+                    from Attendance.views import leave_split_cal
+                    leave_split_cal((self,))
+                    # 自动计算
+            except LeaveInfo.DoesNotExist:
                 super(LeaveInfo, self).save(*args, **kwargs)  # Call the "real" save() method.
                 # 保存之后才能拆分
                 # 拆分单据，有重复则报错
                 from Attendance.views import leave_split_cal
                 leave_split_cal((self,))
-                # 自动计算
             from Attendance.views import attendance_cal
             attendance_cal((self.emp,), self.start_date, self.end_date)
             # except IntegrityError:
