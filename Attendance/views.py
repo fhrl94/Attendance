@@ -667,7 +667,8 @@ def attendance_total_cal(emp_queryset, start_date, end_date):
 
 def attendance_total_cal_sum(emp, start_date, attendance_info_dict_list):
     arrive_total = real_arrive_total = absenteeism_total = late_total = 0
-    leave_dict = {'病假': 0, '事假': 0, '年假': 0, '婚假': 0, '丧假': 0, '陪产假': 0, '产假': 0, '工伤假': 0, '探亲假': 0, '出差': 0, '其他假': 0}
+    leave_dict = {'病假': 0, '事假': 0, '年假': 0, '婚假': 0, '丧假': 0,
+                  '陪产假': 0, '产假': 0, '工伤假': 0, '探亲假': 0, '出差（请假）': 0, '其他假': 0}
     for one in attendance_info_dict_list:
         # 统计考勤
         # arrive_total = arrive_total + 1 if one.get('attendance_date_status', 0) == True else 0
@@ -706,7 +707,7 @@ def attendance_total_cal_sum(emp, start_date, attendance_info_dict_list):
     maternity_leave_total = leave_dict['产假']
     work_related_injury_leave_total = leave_dict['工伤假']
     home_leave_total = leave_dict['探亲假']
-    travelling_total = leave_dict['出差']
+    travelling_total = leave_dict['出差（请假）']
     other_leave_total = leave_dict['其他假']
     attendance_total_ins = AttendanceTotalInfo(emp=emp, section_date=start_date, arrive_total=arrive_total,
                                                real_arrive_total=real_arrive_total, absenteeism_total=absenteeism_total,
