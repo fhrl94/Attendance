@@ -8,6 +8,7 @@ from django.db import models
 # Create your models here.
 
 status_choice = (('0', '未使用'), ('1', '使用中'), ('2', '已失效'))
+user_status_choice = (('0', '未审核'), ('1', '已审核'), ('2', '已失效'))
 
 
 # 人员信息
@@ -175,7 +176,7 @@ class EditAttendance(models.Model):
                                              to_field='attendanceexceptionstatus_ptr',
                                              limit_choices_to={'exception_status': '1'}, verbose_name='签卡原因')
     #  单据状态
-    edit_attendance_status = models.CharField('签卡单据状态', max_length=2, choices=status_choice)
+    edit_attendance_status = models.CharField('签卡单据状态', max_length=2, choices=user_status_choice)
     edit_attendance_operate = models.DateTimeField('操作日期', auto_now=True)
 
     def __str__(self):
@@ -238,7 +239,7 @@ class LeaveInfo(models.Model):
     leave_info_time_end = models.TimeField('请假结束时间', )
     leave_type = models.ForeignKey(LeaveType, on_delete=models.CASCADE, to_field='attendanceexceptionstatus_ptr',
                                    limit_choices_to={'exception_status': '1'}, verbose_name='假期类型')
-    leave_info_status = models.CharField('假期单据状态', max_length=2, choices=status_choice)
+    leave_info_status = models.CharField('假期单据状态', max_length=2, choices=user_status_choice)
     # TODO 审批人
     leave_info_operate = models.DateTimeField('假期操作日期', auto_now=True)
 

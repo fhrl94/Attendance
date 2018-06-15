@@ -236,8 +236,8 @@ $(document).ready(function(){
         // 请假、签卡单据状态
         $(".edit_attendance_status, .leave_info_status").each(function(){
                 switch ($(this).text()){
-                    case '0': $(this).text("未使用");break;
-                    case '1': $(this).text("使用中");break;
+                    case '0': $(this).text("未审核");break;
+                    case '1': $(this).text("已审核");break;
                     case '2': $(this).text("已失效");break;
                 }
             });
