@@ -446,11 +446,10 @@ def get_original_card_dict(emp_one, start_date, end_date):
             original_card_dict[one['attendance_card'].date()] = {}
             # 排序过，当天最小值，第一次赋值
             original_card_dict[one['attendance_card'].date()]['min'] = one['attendance_card'].time()
-        else:
-            emp_attendance = original_card_dict[one['attendance_card'].date()]
-            # 排序过，最后一次赋值，是当天最大值
-            # 第一次赋值 min ，不赋值给 max
-            emp_attendance['max'] = one['attendance_card'].time()
+        emp_attendance = original_card_dict[one['attendance_card'].date()]
+        # 排序过，最后一次赋值，是当天最大值
+        # 需要对最大值，最小值进行判断
+        emp_attendance['max'] = one['attendance_card'].time()
         pass
     return original_card_dict
     pass
@@ -605,10 +604,11 @@ def attendance_cal(emp_queryset, start_date, end_date):
             check_out_type = attendance_exception_status_card_exception
             # 先打卡检索
             if original_card_dict.get(date):
-                if original_card_dict.get(date).get('min'):
+                # 判断原始打卡时间是否在打卡区间内
+                if original_card_dict.get(date).get('min') <= shift_info_dict[shift_name].check_in_end:
                     check_in = original_card_dict.get(date).get('min')
                     check_in_type = attendance_exception_status_card_normal
-                if original_card_dict.get(date).get('max'):
+                if original_card_dict.get(date).get('max') >= shift_info_dict[shift_name].check_out:
                     check_out = original_card_dict.get(date).get('max')
                     check_out_type = attendance_exception_status_card_normal
             # 检索签卡，如果有，覆盖

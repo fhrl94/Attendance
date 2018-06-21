@@ -118,7 +118,7 @@ class ImportMenuPlugin(BaseAdminPlugin):
 class EmployeeInfoAdmin(object):
     import_export_args = {'import_resource_class': EmployeeInfoResource, }
     list_display = ('code', 'name', 'level', 'emp_status', 'pwd_status')
-    list_filter = ('level', 'emp_status',)
+    list_filter = ('level', 'emp_status', 'pwd_status')
     search_fields = ('name', 'code',)
     actions = [SelectedShiftsInfoAction, ShiftSelectAction, CalAttendanceAction, CalAttendanceTotalAction, ]
     exclude = (
