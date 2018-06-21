@@ -608,7 +608,7 @@ def attendance_cal(emp_queryset, start_date, end_date):
                 if original_card_dict.get(date).get('min') <= shift_info_dict[shift_name].check_in_end:
                     check_in = original_card_dict.get(date).get('min')
                     check_in_type = attendance_exception_status_card_normal
-                if original_card_dict.get(date).get('max') >= shift_info_dict[shift_name].check_out:
+                if original_card_dict.get(date).get('max') >= shift_info_dict[shift_name].check_out_start:
                     check_out = original_card_dict.get(date).get('max')
                     check_out_type = attendance_exception_status_card_normal
             # 检索签卡，如果有，覆盖
