@@ -92,6 +92,7 @@ class LeaveInfoForm(forms.ModelForm):
 
     def clean(self):
         super(LeaveInfoForm, self).clean()
+        # TODO 重复验证
         try:
             LeaveInfo.objects.get(**self.cleaned_data)
         except LeaveInfo.DoesNotExist:

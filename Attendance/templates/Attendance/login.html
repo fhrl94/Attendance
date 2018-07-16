@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}考勤系统{% endblock %}</title>
     <!-- Custom CSS -->
     {% block css %}
@@ -27,7 +28,7 @@
         <!--</table>-->
     <!--</form>-->
     <div class="wrap">
-        <div class="container">
+        <div class="container" style="width: 100%">
             <h1>武汉百捷集团，欢迎你</h1>
             <form method="post" >
                 {% csrf_token %}
