@@ -175,7 +175,7 @@ class EmployeeSchedulingInfoAdmin(object):
     # actions = [SelectedShiftsInfoAction, ShiftSelectAction, ]
     list_display = ('emp', 'attendance_date', 'shifts_verbose_name')
     list_filter = ('attendance_date', 'emp__level', 'emp__emp_status')
-    search_fields = ('emp__code', 'emp__name', 'shifts_name')
+    search_fields = ('emp__code', 'emp__name', 'shifts_name__name')
     ordering = ('emp', 'attendance_date')
     pass
 
