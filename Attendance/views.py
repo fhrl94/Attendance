@@ -781,7 +781,7 @@ class AttendanceTotalInfo:
 
 
 #  使用回调，返回日期选择的时间，参数中应该传递要使用的表单
-@login_required(login_url='/xadmin/login/')
+@login_required(login_url='/admin/login/')
 def form_select(request):
     assert ShareContext().path is not None, "管理站的 path 为 None"
     if request.method == 'POST':

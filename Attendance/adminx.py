@@ -217,7 +217,7 @@ class LeaveInfoAdmin(object):
     import_export_args = {'import_resource_class': LeaveInfoResource, }
     list_display = (
     'emp', 'start_date', 'leave_info_time_start', 'end_date', 'leave_info_time_end', 'leave_type', 'leave_info_status',)
-    list_filter = ('leave_type',)
+    list_filter = ('leave_type', 'start_date', 'end_date')
     search_fields = ('emp__code', 'emp__name')
     form = LeaveInfoForm
     pass
