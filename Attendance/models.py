@@ -4,8 +4,10 @@ import sys
 from django.contrib.auth.models import User
 from django.core.validators import RegexValidator
 from django.db import models
-
 # Create your models here.
+from django.db.models import Sum
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 
 status_choice = (('0', '未使用'), ('1', '使用中'), ('2', '已失效'))
 user_status_choice = (('0', '未审核'), ('1', '已审核'), ('2', '已失效'))
@@ -19,6 +21,21 @@ def user_directory_path(instance, filename):
                                                   time=datetime.datetime.today().strftime('%Y_%m_%d_%H_%M_%S'))
 
 
+# 查看级别
+class LevelStatus(models.Model):
+    level_name = models.CharField('级别名称', max_length=30, unique=True)
+    level_code = models.CharField('级别编码', max_length=4, unique=True)
+    level_status = models.CharField('使用状态', choices=status_choice, max_length=2)
+    level_operate = models.DateTimeField('操作日期', auto_now=True)
+
+    def __str__(self):
+        return self.level_name
+
+    class Meta:
+        verbose_name = '级别类型'
+        verbose_name_plural = verbose_name
+
+
 class EmployeeInfo(User):
     # emp_status_choice = (('0', '已离职'), ('1', '在职'), ('2', '试用'), ('3', '实习'))
     # 继承 User 在导入或新增的时候，能直接实现数据查看
@@ -27,7 +44,11 @@ class EmployeeInfo(User):
     name = models.CharField('姓名', max_length=10)
     code = models.CharField('工号', max_length=10, validators=[RegexValidator(r'^[\d]{10}')], unique=True)
     #  排班时，需要做筛选，使用书签实现
-    level = models.CharField('级别', max_length=10, )
+    level = models.ForeignKey(LevelStatus, verbose_name='级别', to_field='level_name', on_delete=models.PROTECT,
+                              limit_choices_to={'level_status': '1'})
+    enter_date = models.DateField('虚拟入职日期')
+    last_enter_date = models.DateField('入职日期')
+    gender = models.CharField(verbose_name='性别', max_length=1, choices=(('0', '男'), ('1', '女')))
     emp_status = models.CharField('员工状态', max_length=4, )
     pwd_status = models.BooleanField('密码是否修改')
 
@@ -165,6 +186,7 @@ class EditAttendanceType(AttendanceExceptionStatus):
         verbose_name = '签卡类型'
         verbose_name_plural = verbose_name
 
+
 #  约束条件应为 edit_attendance_date 中的上午下午不能存在重复值
 class EditAttendance(models.Model):
     emp = models.ForeignKey(EmployeeInfo, to_field='code', on_delete=models.CASCADE, verbose_name='工号')
@@ -183,15 +205,33 @@ class EditAttendance(models.Model):
         return str(self.emp)
 
     def save(self, *args, **kwargs):
-        try:
-            if (EditAttendance.objects.get(pk=self.pk) == self) is False:
-                # 需要先验证，才能选择是否保存
-                from Attendance.views import edit_attendance_distinct
-                edit_attendance_distinct(self)
-        except EditAttendance.DoesNotExist:
-            # 需要先验证，才能选择是否保存
-            from Attendance.views import edit_attendance_distinct
+        from Attendance.views import edit_attendance_equal
+        from Attendance.views import edit_attendance_distinct
+        # 重复验证
+        # 新增单据
+        if self.pk is None:
             edit_attendance_distinct(self)
+        # 无修改
+        elif edit_attendance_equal(EditAttendance.objects.get(pk=self.pk), self) is True:
+            # print("无变化")
+            pass
+        # 有修改
+        elif edit_attendance_equal(EditAttendance.objects.get(pk=self.pk), self) is False:
+            from Attendance.views import edit_attendance_ins_built
+            # 存储修改前的单据
+            tmp_edit_attendance_ins = edit_attendance_ins_built(EditAttendance.objects.get(pk=self.pk))
+            # 删除修改前的单据
+            EditAttendance.objects.get(pk=self.pk).delete()
+            # 是否存在重复记录，有重复则报错
+            try:
+                edit_attendance_distinct(self)
+            except UserWarning as e:
+                EditAttendance.objects.bulk_create((tmp_edit_attendance_ins,))
+                # 还原删除的单据
+                raise e
+                pass
+        else:
+            raise UserWarning("请联系管理员")
         super(EditAttendance, self).save(*args, **kwargs)  # Call the "real" save() method.
         # 自动计算
         from Attendance.views import attendance_cal
@@ -199,8 +239,7 @@ class EditAttendance(models.Model):
 
     class Meta:
         verbose_name = '签卡信息维护'
-        verbose_name_plural = verbose_name
-        # unique_together = ('emp', 'edit_attendance_date', 'edit_attendance_status')
+        verbose_name_plural = verbose_name  # unique_together = ('emp', 'edit_attendance_date', 'edit_attendance_status')
 
 
 # 5. 请假（请假单、请假拆分）
@@ -228,7 +267,7 @@ class LeaveType(AttendanceExceptionStatus):
         verbose_name_plural = verbose_name
 
 
-# TODO 假期额度限制
+#  假期额度限制
 
 class LeaveInfo(models.Model):
     # 表的结构:
@@ -243,36 +282,76 @@ class LeaveInfo(models.Model):
     # TODO 审批人
     leave_info_operate = models.DateTimeField('假期操作日期', auto_now=True)
 
+    # 实时统计假期长度
+    @property
+    def count_length_dynamic(self):
+        count_length_list = LeaveDetail.objects.filter(leave_info_id=self, leave_info_status='1').all()
+        if count_length_list:
+            return count_length_list.aggregate(Sum('count_length'))['count_length__sum']
+        else:
+            return '无'
+        pass
+
     def __str__(self):
         return str(self.emp)
 
     def save(self, *args, **kwargs):
-        #
-        if self.start_date <= self.end_date:
-            try:
-                if (LeaveInfo.objects.get(pk=self.pk) == self) is False:
-                    super(LeaveInfo, self).save(*args, **kwargs)  # Call the "real" save() method.
-                    # 保存之后才能拆分
-                    # 拆分单据，有重复则报错
-                    from Attendance.views import leave_split_cal
-                    leave_split_cal((self,))
-                    # 自动计算
-            except LeaveInfo.DoesNotExist:
-                super(LeaveInfo, self).save(*args, **kwargs)  # Call the "real" save() method.
-                # 保存之后才能拆分
-                # 拆分单据，有重复则报错
-                from Attendance.views import leave_split_cal
-                leave_split_cal((self,))
-            from Attendance.views import attendance_cal
-            attendance_cal((self.emp,), self.start_date, self.end_date)
-            # except IntegrityError:
-            #     raise UserWarning('无效')
+        if self.start_date > self.end_date:
+            raise UserWarning('开始日期必须要小于等于结束日期')
+        # 检查额度类型是否存在
+        from Attendance.views import check_limit_type
+        check_limit_type(self)
+        from Attendance.views import leave_split
+        from Attendance.views import leave_info_equal
+        # 新增单据
+        if self.pk is None:
+            pass
+        # 修改单据
+        elif leave_info_equal(LeaveInfo.objects.get(pk=self.pk), self) is False:
+            # 删除已修改单据关联的 leave_detail
+            LeaveDetail.objects.filter(leave_info_id=self).all().delete()
+        # 保存结果与之前一致, 无操作
+        elif leave_info_equal(LeaveInfo.objects.get(pk=self.pk), self) is True:
+            pass
         else:
-            raise UserWarning('开始日期必须要大于结束日期')
+            # 不太可能出现其他情况
+            raise UserWarning('未知错误, 联系管理员')
+        # 拆分单据，有重复则报错
+        try:
+            leave_split(self)
+        except UserWarning as e:
+            # 恢复已删除 单据关联的 leave_detail
+            LeaveDetail.objects.bulk_create(leave_split(LeaveInfo.objects.get(pk=self.pk)))
+            raise e
+        # 保存数据
+        super(LeaveInfo, self).save(*args, **kwargs)  # Call the "real" save() method.
+        # 拆分单据，并保存 leave_detail
+        from Attendance.views import leave_split_cal
+        leave_split_cal((self,))
+        # 计算假期额度
+        from Attendance.views import limit_update
+        limit_update(self.emp, start_date=self.start_date, end_date=self.end_date)
+        # 考勤计算
+        from Attendance.views import attendance_cal
+        attendance_cal((self.emp,), self.start_date, self.end_date)
 
     class Meta:
         verbose_name = '假期信息维护'
         verbose_name_plural = verbose_name
+
+
+# LeaveInfo 对象执行 delete() 时, 先触发
+# 更新额度
+@receiver(pre_delete, sender=LeaveInfo)
+def pre_delete(sender, instance, using, **kwargs):
+    print('额度更新')
+    print(instance)
+    tmp_leave_info_ins = instance
+    LeaveDetail.objects.filter(leave_info_id=tmp_leave_info_ins).delete()
+    from Attendance.views import limit_update
+    #  额度更新
+    limit_update(tmp_leave_info_ins.emp, start_date=tmp_leave_info_ins.start_date, end_date=tmp_leave_info_ins.end_date)
+    pass
 
 
 class LeaveDetail(models.Model):
@@ -281,8 +360,10 @@ class LeaveDetail(models.Model):
     leave_date = models.DateField('请假日期')
     leave_detail_time_start = models.TimeField('上午请假时间', null=True, blank=True)
     leave_detail_time_end = models.TimeField('下午请假时间', null=True, blank=True)
-    leave_type = models.ForeignKey(LeaveType, to_field='exception_name', on_delete=models.CASCADE, verbose_name='假期类型')
+    leave_type = models.ForeignKey(LeaveType, to_field='attendanceexceptionstatus_ptr', on_delete=models.CASCADE,
+                                   limit_choices_to={'exception_status': '1'}, verbose_name='假期类型')
     leave_info_status = models.CharField('假期明细单据状态', max_length=2, choices=status_choice)
+    count_length = models.FloatField(verbose_name='长度统计', )
     leave_detail_operate = models.DateTimeField('假期明细操作日期', auto_now=True)
 
     def __str__(self):
@@ -291,8 +372,6 @@ class LeaveDetail(models.Model):
     class Meta:
         verbose_name = '假期明细'
         verbose_name_plural = verbose_name
-        #  约束条件应为 leave_date 中的上午下午不能存在重复值
-        # unique_together = ('emp', 'leave_date', 'leave_info_status')
 
     pass
 
@@ -362,5 +441,78 @@ class AttendanceTotal(models.Model):
         verbose_name = '考勤信息汇总'
         verbose_name_plural = verbose_name
         unique_together = ('emp_name', 'section_date')
+
+    pass
+
+
+# 查看假期额度
+rate_choice = (('0', '年'), ('1', '月'))
+
+
+class LimitStatus(models.Model):
+    leave_type = models.OneToOneField(LeaveType, to_field='attendanceexceptionstatus_ptr', on_delete=models.CASCADE,
+                                      limit_choices_to={'exception_status': '1'}, verbose_name='假期类型')
+    standard_limit = models.FloatField(verbose_name='标准额度', )
+    standard_frequency = models.IntegerField(verbose_name='标准次数', )
+    rate = models.CharField(verbose_name='周期', max_length=2, choices=rate_choice)
+    limit_status_operate = models.DateTimeField('假期操作日期', auto_now=True)
+
+    #  能手动维护的只有 额度增减
+    def save(self, *args, **kwargs):
+        # TODO 友好型提示
+        assert self.standard_limit % 1 in (0.5, 0), "增减额度必须为 0.5 的倍数"
+        super(LimitStatus, self).save(*args, **kwargs)
+        pass
+
+    def __str__(self):
+        return str(self.leave_type)
+
+    class Meta:
+        verbose_name = '额度类型'
+        verbose_name_plural = verbose_name
+
+
+# 年假额度
+class Limit(models.Model):
+    emp_ins = models.ForeignKey(EmployeeInfo, to_field='code', on_delete=models.CASCADE, verbose_name='姓名', )
+    holiday_type = models.ForeignKey(LeaveType, on_delete=models.CASCADE, to_field='attendanceexceptionstatus_ptr',
+                                     limit_choices_to={'exception_status': '1'}, verbose_name='假期类型')
+    rate = models.CharField(verbose_name='周期', max_length=2, choices=rate_choice)
+    start_date = models.DateField(verbose_name='开始日期', )
+    end_date = models.DateField(verbose_name='结束日期', )
+    standard_limit = models.FloatField(verbose_name='标准额度', )
+    standard_frequency = models.IntegerField(verbose_name='标准次数', )
+    used_limit = models.FloatField(verbose_name='已用额度', )
+    used_frequency = models.IntegerField(verbose_name='已用次数', )
+    limit_edit = models.FloatField(verbose_name='额度增减', )
+    frequency_edit = models.IntegerField(verbose_name='次数增减')
+    surplus_limit = models.FloatField(verbose_name='剩余额度', )
+    surplus_frequency = models.IntegerField(verbose_name='剩余次数')
+    limit_operate = models.DateTimeField('假期操作日期', auto_now=True)
+
+    def __str__(self):
+        return str(self.emp_ins)
+
+    @property
+    def enterdate(self):
+        # 返回虚拟入职日期
+        return self.emp_ins.enter_date
+        pass
+
+    #  能手动维护的只有 额度增减
+    def save(self, *args, **kwargs):
+        # TODO 友好型提示
+        assert self.limit_edit % 1 in (0.5, 0), "增减额度必须为 0.5 的倍数"
+        self.surplus_frequency = self.standard_frequency + self.frequency_edit - self.used_frequency
+        self.surplus_limit = self.standard_limit + self.limit_edit - self.used_limit
+        # 额度不足
+        assert self.surplus_frequency >= 0, "{name} 当前次数不足".format(name=self.emp_ins)
+        assert self.surplus_limit >= 0, "{name} 当前额度不足".format(name=self.emp_ins)
+        super(Limit, self).save(*args, **kwargs)
+        pass
+
+    class Meta:
+        verbose_name = '额度管理'
+        verbose_name_plural = verbose_name
 
     pass

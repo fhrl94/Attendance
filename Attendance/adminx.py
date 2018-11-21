@@ -9,11 +9,11 @@ from xadmin.views import CommAdminView, BaseAdminPlugin
 from Attendance.forms import DateSelectForm, ShiftsInfoDateForm, EditAttendanceForm, LeaveInfoForm
 from Attendance.models import EmployeeInfo, OriginalCard, ShiftsInfo, EmployeeSchedulingInfo, EditAttendanceType, \
     EditAttendance, LeaveType, LeaveInfo, AttendanceExceptionStatus, AttendanceInfo, OriginalCardImport, LegalHoliday, \
-    AttendanceTotal
+    AttendanceTotal, Limit, LevelStatus, LimitStatus, LeaveDetail
 from Attendance.resources import EmployeeInfoResource, OriginalCardResource, EditAttendanceTypeResource, \
-    LeaveTypeResource, EditAttendanceResource, LeaveInfoResource
+    LeaveTypeResource, EditAttendanceResource, LeaveInfoResource, LevelStatusResource, LimitStatusResource
 from Attendance.views import get_path, ShareContext, attendance_total_cal, form_select, attendance_cal, shift_swap, \
-    cal_scheduling_info, original_card_import
+    cal_scheduling_info, original_card_import, cal_limit, leave_split_cal
 
 
 class SelectedShiftsInfoAction(BaseActionView):
@@ -93,6 +93,25 @@ class CalAttendanceTotalAction(BaseActionView):
         return redirect(form_select)
 
 
+class CalAttendanceLimitAction(BaseActionView):
+    # 这里需要填写三个属性
+    #: 相当于这个 Action 的唯一标示, 尽量用比较针对性的名字
+    action_name = "考勤额度计算"
+    #: 描述, 出现在 Action 菜单中, 可以使用 ``%(verbose_name_plural)s`` 代替 Model 的名字.
+    description = '考勤额度计算 %(verbose_name_plural)s'
+    model_perm = 'change'  #: 该 Action 所需权限
+
+    # 而后实现 do_action 方法
+    def do_action(self, queryset):
+        context = self.get_context()
+        self.message_user("选择要计算考勤额度的日期")
+        print({one: "" for one in DateSelectForm.base_fields})
+        ShareContext(context=context, path=self.request.path, query_list=queryset, form=DateSelectForm, title='考勤额度计算',
+                     templates='Attendance/selected.html', callback=cal_limit,
+                     argument_dict={one: "" for one in DateSelectForm.base_fields})
+        return redirect(form_select)
+
+
 # 继承BaseAdminPlugin类
 class ImportMenuPlugin(BaseAdminPlugin):
     # 使用插件时需要在ModelAdmin类中设置import_export_args属性，插件初始化时使用ModelAdmin的import_export_args进行赋值
@@ -114,13 +133,22 @@ class ImportMenuPlugin(BaseAdminPlugin):
                                                  context=context))
 
 
+@xadmin.sites.register(LevelStatus)
+class LevelStatusAdmin(object):
+    import_export_args = {'import_resource_class': LevelStatusResource, }
+    model = LevelStatus
+    list_display = ('level_name', 'level_code', 'level_status', 'level_operate',)
+    pass
+
+
 @xadmin.sites.register(EmployeeInfo)
 class EmployeeInfoAdmin(object):
     import_export_args = {'import_resource_class': EmployeeInfoResource, }
-    list_display = ('code', 'name', 'level', 'emp_status', 'pwd_status')
+    list_display = ('code', 'name', 'level', 'enter_date', 'last_enter_date', 'gender', 'emp_status', 'pwd_status')
     list_filter = ('level', 'emp_status', 'pwd_status')
     search_fields = ('name', 'code',)
-    actions = [SelectedShiftsInfoAction, ShiftSelectAction, CalAttendanceAction, CalAttendanceTotalAction, ]
+    actions = [SelectedShiftsInfoAction, ShiftSelectAction, CalAttendanceLimitAction, CalAttendanceAction,
+               CalAttendanceTotalAction, ]
     exclude = (
     'first_name', 'last_name', 'email', 'is_staff', 'date_joined', 'last_login', 'is_active', 'is_superuser', 'groups',
     'user_permissions')
@@ -215,11 +243,29 @@ class LeaveTypeAdmin(object):
 @xadmin.sites.register(LeaveInfo)
 class LeaveInfoAdmin(object):
     import_export_args = {'import_resource_class': LeaveInfoResource, }
-    list_display = (
-    'emp', 'start_date', 'leave_info_time_start', 'end_date', 'leave_info_time_end', 'leave_type', 'leave_info_status',)
+    list_display = ('emp', 'start_date', 'leave_info_time_start', 'end_date', 'leave_info_time_end', 'leave_type',
+                    'leave_info_status', 'count_length_dynamic')
+    #
     list_filter = ('leave_type', 'start_date', 'end_date')
     search_fields = ('emp__code', 'emp__name')
     form = LeaveInfoForm
+    actions = ['cal_leave_detail', 'cal_leave_info']
+
+    #  因主键对应关系变动, 需要重新保存
+    def cal_leave_detail(self, request, queryset):
+        leave_split_cal(queryset)
+        pass
+
+    cal_leave_detail.short_description = '假期拆分计算'
+    pass
+
+
+@xadmin.sites.register(LeaveDetail)
+class LeaveDetailAdmin(object):
+    list_display = (
+        'emp', 'leave_info_id', 'leave_date', 'count_length', 'leave_detail_time_start', 'leave_detail_time_end',
+        'leave_type', 'leave_info_status')
+    search_fields = ('emp__code', 'emp__name')
     pass
 
 
@@ -256,6 +302,31 @@ class AttendanceTotalAdmin(object):
     pass
 
 
+@xadmin.sites.register(LimitStatus)
+class LimitStatusAdmin(object):
+    import_export_args = {'import_resource_class': LimitStatusResource, }
+    list_display = ('leave_type', 'standard_limit', 'standard_frequency', 'rate', 'limit_status_operate')
+
+    pass
+
+
+@xadmin.sites.register(Limit)
+class LimitAdmin(object):
+    list_display = (
+    'emp_ins', 'enterdate', 'holiday_type', 'rate', 'start_date', 'end_date', 'standard_limit', 'standard_frequency',
+    'used_limit', 'used_frequency', 'limit_edit', 'frequency_edit', 'surplus_limit', 'surplus_frequency',)
+    readonly_fields = (
+        'emp_ins', 'holiday_type', 'rate', 'start_date', 'end_date', 'standard_limit', 'standard_frequency',
+        'used_limit', 'used_frequency', 'surplus_limit', 'surplus_frequency',)
+    list_filter = ('holiday_type', 'rate', 'start_date', 'end_date')
+    #  编辑后 无法自动刷新
+    list_editable = ('limit_edit', 'frequency_edit',)
+    search_fields = ('emp_ins__code', 'emp_ins__name')
+    # ordering = ('emp_ins__code', 'holiday_type')
+
+    pass
+
+
 class GlobalSetting(object):
     # 设置base_site.html的Title
     site_title = '考勤信息处理'
@@ -264,14 +335,3 @@ class GlobalSetting(object):
 
 
 xadmin.site.register(CommAdminView, GlobalSetting)
-
-# xadmin.site.register(EmployeeInfo)
-# xadmin.site.register(OriginalCard)
-# xadmin.site.register(ShiftsInfo)
-# xadmin.site.register(EmployeeSchedulingInfo)
-# xadmin.site.register(EditAttendanceType)
-# xadmin.site.register(EditAttendance)
-# xadmin.site.register(LeaveType)
-# xadmin.site.register(LeaveInfo)
-# xadmin.site.register(AttendanceExceptionStatus)
-# xadmin.site.register(AttendanceInfo)

@@ -12,7 +12,8 @@ from django.urls import reverse
 
 from Attendance.forms import UserForm, ChangePwdForm
 from Attendance.models import OriginalCardImport, EmployeeInfo, EmployeeSchedulingInfo, ShiftsInfo, LegalHoliday, \
-    AttendanceInfo, OriginalCard, AttendanceExceptionStatus, EditAttendance, LeaveInfo, LeaveDetail, AttendanceTotal
+    AttendanceInfo, OriginalCard, AttendanceExceptionStatus, EditAttendance, LeaveInfo, LeaveDetail, AttendanceTotal, \
+    Limit, LeaveType, LimitStatus
 
 
 # TODO 返回友好型页面，而不是报错
@@ -171,7 +172,7 @@ def cal_scheduling_info(queryset, start_date, end_date, shifts_name, ):
     legal_holiday_dict = {}
     # Q & = and ， | = or
     question = Q(status='1') & Q(legal_holiday__gte=start_date) & Q(legal_holiday__lte=end_date)
-    # TODO 拆包
+    #  拆包
     legal_holiday_dict_list = LegalHoliday.objects.filter(question).values('legal_holiday', 'legal_holiday_name')
     for legal_holiday_dict_one in legal_holiday_dict_list:
         legal_holiday_dict[legal_holiday_dict_one['legal_holiday']] = legal_holiday_dict_one['legal_holiday_name']
@@ -184,7 +185,7 @@ def cal_scheduling_info(queryset, start_date, end_date, shifts_name, ):
             emp_scheduling_info = EmployeeSchedulingInfo()
             emp_scheduling_info.emp = EmployeeInfo.objects.get(id=one.id)
             emp_scheduling_info.attendance_date = date
-            # TODO 班次选择
+            # 班次选择
             # print(date)
             if date in legal_holiday_dict.keys():
                 emp_scheduling_info.shifts_name = ShiftsInfo.objects.get(name='节假日班次')
@@ -229,13 +230,16 @@ def shift_swap(queryset, start_date, end_date, ):
 
 # 假期拆分
 def leave_split(leave_info_ins):
+    assert isinstance(leave_info_ins, LeaveInfo), "leave_info_ins 不是 LeaveInfo 对象"
     leave_detail_ins_list = []
     shift_info_dict = get_shift_info_dict()
+    # TODO 没有排班会影响<假期拆分>的结果
     scheduling_info_dict = get_scheduling_info_dict(leave_info_ins.emp, leave_info_ins.start_date,
                                                     leave_info_ins.end_date)
     # question = Q(emp=leave_info_ins.emp) & Q(leave_date__gte=leave_info_ins.start_date) & Q(
     #     leave_date__lte=leave_info_ins.end_date)
     # models 中进行了关联，直接通过实例就可以了
+    # 无 ID 不会删除已关联的 LeaveDetail
     question = Q(leave_info_id=leave_info_ins)
     LeaveDetail.objects.filter(question).delete()
     for attendance_date, shift_name in scheduling_info_dict.items():
@@ -276,6 +280,8 @@ def leave_split(leave_info_ins):
         leave_detail_ins.leave_info_status = leave_info_ins.leave_info_status
         #  判断是否有重复单据
         leave_info_distinct(leave_detail_ins)
+        leave_detail_ins.count_length = float((0 if leave_detail_ins.leave_detail_time_start is None else 0.5) + (
+            0 if leave_detail_ins.leave_detail_time_end is None else 0.5))
         leave_detail_ins_list.append(leave_detail_ins)
     return leave_detail_ins_list
 
@@ -284,6 +290,7 @@ def leave_info_distinct(leave_detail_ins_tmp):
     assert isinstance(leave_detail_ins_tmp, LeaveDetail), "使用错误，不是请假明细实例"
     query_list = Q(emp=leave_detail_ins_tmp.emp) & Q(leave_date=leave_detail_ins_tmp.leave_date) & Q(
         leave_info_status=leave_detail_ins_tmp.leave_info_status)
+    # 上午/下午  全天  上午  下午 无 ,共5种情况 不需要初始化 attendance_date
     leave_detail_ins_list = LeaveDetail.objects.filter(query_list)
     attendance_date = {}
     for one in leave_detail_ins_list:
@@ -299,11 +306,11 @@ def leave_info_distinct(leave_detail_ins_tmp):
                 raise UserWarning("下午存在重复记录")
         if attendance_date.get(
                 'leave_detail_time_start') is not None and leave_detail_ins_tmp.leave_detail_time_start is not None:
-            raise UserWarning("存在重复记录，已有{date}上午的签卡单".format(date=leave_detail_ins_tmp.leave_date))
+            raise UserWarning("存在重复记录，已有{date}上午的请假单".format(date=leave_detail_ins_tmp.leave_date))
         if attendance_date.get(
                 'leave_detail_time_end') is not None and leave_detail_ins_tmp.leave_detail_time_end is not None:
-            raise UserWarning("存在重复记录，已有{date}下午的签卡单".format(date=leave_detail_ins_tmp.leave_date))
-        pass  # if len(leave_detail_ins_list) == 2:  # raise UserWarning("存在重复记录")  # elif len(leave_detail_ins_list) == 1:  # leave_detail_ins = leave_detail_ins_list[0]  # if leave_detail_ins.leave_detail_time_start is not None and leave_detail_ins.leave_detail_time_end is not None:  # raise UserWarning("{date}全天存在重复记录".format(date=leave_detail_ins.leave_date))  # else:  # if leave_detail_ins.leave_detail_time_start is not None and leave_detail_ins_tmp.leave_detail_time_start is not None:  # raise UserWarning("{date}上午存在重复记录".format(date=leave_detail_ins.leave_date))  # if leave_detail_ins.leave_detail_time_end is not None and leave_detail_ins_tmp.leave_detail_time_end is not None:  # raise UserWarning("{date}下午存在重复记录".format(date=leave_detail_ins.leave_date))  # pass  # elif len(leave_detail_ins_list) == 0:  # pass  # else:  # raise UserWarning("出现异常，联系管理员")  # pass
+            raise UserWarning("存在重复记录，已有{date}下午的请假单".format(date=leave_detail_ins_tmp.leave_date))
+    pass  # if len(leave_detail_ins_list) == 2:  #     raise UserWarning("存在重复记录")  # elif len(leave_detail_ins_list) == 1:  #     leave_detail_ins = leave_detail_ins_list[0]  #     if leave_detail_ins.leave_detail_time_start is not None and leave_detail_ins.leave_detail_time_end is not None:  #         raise UserWarning("{date}全天存在重复记录".format(date=leave_detail_ins.leave_date))  #     else:  #         if leave_detail_ins.leave_detail_time_start is not None and leave_detail_ins_tmp.leave_detail_time_start is not None:  #             raise UserWarning("{date}上午存在重复记录".format(date=leave_detail_ins.leave_date))  #         if leave_detail_ins.leave_detail_time_end is not None and leave_detail_ins_tmp.leave_detail_time_end is not None:  #             raise UserWarning("{date}下午存在重复记录".format(date=leave_detail_ins.leave_date))  #             pass  # elif len(leave_detail_ins_list) == 0:  #     pass  # else:  #     raise UserWarning("出现异常，联系管理员")  # pass
 
 
 # TODO 出差可以参考这个
@@ -401,9 +408,12 @@ def get_edit_attendance_dict(emp_one, start_date, end_date):
 #  请假处理 有效识别
 def get_leave_detail_dict(emp_one, start_date, end_date):
     assert isinstance(emp_one, EmployeeInfo), "emp 不是 EmployeeInfo 对象"
+    assert end_date >= start_date, "开始时间小于等于结束时间"
     # 对 假期的 开始日期小于考勤计算的结束日期 或 假期的 结束日期大于考勤计算的起始日期
     # 此次不需要判断是否生效
-    question = Q(emp=emp_one.code) & (Q(start_date__lte=end_date) | Q(end_date__gte=start_date))
+    # TODO 测试是否影响 考勤数据
+    question = Q(emp=emp_one.code) & ((Q(end_date__gte=start_date) & Q(start_date__lte=start_date)) | (
+                Q(end_date__gte=end_date) & Q(start_date__lte=end_date)))
     leave_info_list = LeaveInfo.objects.filter(question)
     if len(leave_info_list):
         leave_split_cal(leave_info_list)
@@ -429,6 +439,9 @@ def get_leave_detail_dict(emp_one, start_date, end_date):
             else:
                 raise UserWarning("存在重复记录-{name}的{attendance_date}存在重复的请假数据".format(name=one.emp.name,
                                                                                     attendance_date=one.leave_date))
+    #  额度更新
+    # 不在考勤计算中更新, 会加长时间, 影响用户体验
+    # limit_update(emp=emp_one, start_date=start_date, end_date=end_date)
     return leave_detail_dict
 
 
@@ -555,26 +568,14 @@ class ExceptionAttendanceInfo:
 
 # 考勤明细计算
 def attendance_cal(emp_queryset, start_date, end_date):
+    assert end_date >= start_date, "开始时间小于等于结束时间"
     # 获取排班信息 get_scheduling_info_dict
     # 获取班次信息 get_shift_info_dict
     # 获取签卡数据 get_edit_attendance_dict
     # 获取请假拆分后的数据 get_leave_detail_dict
     # TODO 获取出差数据
     # 获取原始打卡数据 get_original_card_dict
-
     # 数据整合 数据结构
-    """
-    emp = models.ForeignKey(EmployeeInfo, to_field='code', on_delete=models.CASCADE, verbose_name='工号')
-    attendance_date = models.DateField('考勤日期')
-    check_in = models.TimeField('上班时间', null=True)
-    check_out = models.TimeField('下班时间', null=True)
-    check_in_status = models.ForeignKey(AttendanceExceptionStatus, to_field='exception_name', on_delete=models.CASCADE,
-                                        verbose_name='上午考勤状态', related_name='check_in_status')
-    check_out_status = models.ForeignKey(AttendanceExceptionStatus, to_field='exception_name', on_delete=models.CASCADE,
-                                         verbose_name='下午考勤状态', related_name='check_out_status')
-    check_status = models.BooleanField('是否异常')
-    attendance_date_status = models.BooleanField('是否工作日')
-    """
     # 数据写入
     # 获取班次信息 get_shift_info_dict
     shift_info_dict = get_shift_info_dict()
@@ -667,8 +668,8 @@ def attendance_total_cal(emp_queryset, start_date, end_date):
 
 def attendance_total_cal_sum(emp, start_date, attendance_info_dict_list):
     arrive_total = real_arrive_total = absenteeism_total = late_total = 0
-    leave_dict = {'病假': 0, '事假': 0, '年假': 0, '婚假': 0, '丧假': 0,
-                  '陪产假': 0, '产假': 0, '工伤假': 0, '探亲假': 0, '出差（请假）': 0, '其他假': 0}
+    leave_dict = {'病假': 0, '事假': 0, '年假': 0, '婚假': 0, '丧假': 0, '陪产假': 0, '产假': 0, '工伤假': 0, '探亲假': 0, '出差（请假）': 0,
+                  '其他假': 0}
     for one in attendance_info_dict_list:
         # 统计考勤
         # arrive_total = arrive_total + 1 if one.get('attendance_date_status', 0) == True else 0
@@ -800,7 +801,7 @@ def form_select(request):
             return redirect(path)  # return redirect('http://127.0.0.1:8000/xadmin/Attendance/employeeinfo/')
     else:
         form = ShareContext().form()
-        print('获取表单')
+        print('获取表单 {actions}'.format(actions=ShareContext().title))
     assert ShareContext().share_context is not None, "管理站的context 为 None"
     context = ShareContext().share_context
     context.update({"form": form, "title": ShareContext().title, })
@@ -839,7 +840,7 @@ def user_login(request):
 @login_required(login_url="login")
 def home_form(request):
     """
-    登录后直接跳转页面， 【首页】，提示员工是否有相关问卷需要填写
+    登录后直接跳转页面， 【首页】，初次登录需要修改密码
     :param request:
     :return:
     """
@@ -961,3 +962,269 @@ def user_cal(user_emp, start_date, end_date):
     if end_date_tmp >= datetime.date.today():
         end_date_tmp = datetime.date.today()
     attendance_total_cal((user_emp,), start_date=start_date_tmp, end_date=end_date_tmp)
+
+
+def cal_limit(queryset, start_date, end_date):
+    """
+    额度创建
+    :param queryset:
+    :param start_date:
+    :param end_date:
+    :return:
+    """
+    assert isinstance(queryset[0], EmployeeInfo), "使用错误, 必须是 EmployeeInfo 对象"
+    assert end_date >= start_date, "开始时间小于等于结束时间"
+    assert LimitStatus.objects.all().exists() is True, "需要先建立假期类型, 再建立额度类型"
+    annual_leave_ins = LeaveType.objects.filter(exception_name='年假').get()
+    paternity_leave_ins = LeaveType.objects.filter(exception_name='陪产假').get()
+    maternity_leave_ins = LeaveType.objects.filter(exception_name='产假').get()
+    bereavement_leave_ins = LeaveType.objects.filter(exception_name='丧假').get()
+    marriage_leave_ins = LeaveType.objects.filter(exception_name='婚假').get()
+    limit_ins_list = []
+    for limit_type_ins in LimitStatus.objects.all():
+        for emp in queryset:
+            # 如果 <入职日期> 比 <结束日期> 大, 则跳过
+            if emp.enter_date >= end_date:
+                continue
+            # 不处理离职人员
+            if '离职' in emp.emp_status:
+                continue
+            # 男性无产假
+            if emp.gender == '0' and limit_type_ins.leave_type == maternity_leave_ins:
+                continue
+            # 女性无陪产假
+            if emp.gender == '1' and limit_type_ins.leave_type == paternity_leave_ins:
+                continue
+            #  丧假/婚假需要转正之后才能有
+            if emp.level.level_name in ('实习', '试用', '待转正') and limit_type_ins.leave_type in (
+                    bereavement_leave_ins, marriage_leave_ins):
+                continue
+            # 周期为 年
+            if limit_type_ins.rate == '0':
+                # 基准日期 为 year-01-01
+                standard_date = start_date.replace(month=1, day=1)
+                tmp_start_date = standard_date
+                #  结束日期为 年末最后一天
+                tmp_end_date = standard_date.replace(month=12, day=31)
+                #  额度类型为 年假/陪产假
+                if limit_type_ins.leave_type in (annual_leave_ins, paternity_leave_ins):
+                    try:
+                        # 入职后一年第一天 小于 起始日期 则有年假/陪产假
+                        if emp.enter_date.replace(year=emp.enter_date.year + 1) <= start_date:
+                            # 年假和陪产假的起始日期为 年初第一天/入职后一年第一天 的最大值
+                            if emp.enter_date.replace(year=emp.enter_date.year + 1) >= standard_date:
+                                tmp_start_date = emp.enter_date.replace(year=emp.enter_date.year + 1)
+                        else:
+                            continue
+                    # 存在 2-29 入职人员, 出错处理
+                    except ValueError:
+                        # 入职后一年第一天 小于 起始日期 则有年假/陪产假
+                        if emp.enter_date.replace(year=emp.enter_date.year + 1, day=28) <= start_date:
+                            # 年假和陪产假的起始日期为 年初第一天/入职后一年第一天 的最大值
+                            if emp.enter_date.replace(year=emp.enter_date.year + 1, day=28) >= standard_date:
+                                tmp_start_date = emp.enter_date.replace(year=emp.enter_date.year + 1, day=28)
+                        else:
+                            continue
+                else:
+                    # 额度类型为 产假
+                    #  周期为 年 起始日期 为 年初第一天/入职第一天(取最大值)
+                    if emp.enter_date >= standard_date:
+                        tmp_start_date = emp.enter_date
+            else:
+                # 基准日期为 year-month-01
+                standard_date = start_date.replace(day=1)
+                tmp_start_date = standard_date
+                tmp_end_date = standard_date + datetime.timedelta(
+                    days=calendar.monthrange(standard_date.year, standard_date.month)[1] - 1)
+            # 开始日期大于结束日期, 跳过
+            if tmp_start_date > tmp_end_date:
+                continue
+            while standard_date <= end_date:
+                question = Q(emp_ins=emp) & ((Q(end_date__gte=tmp_start_date) & Q(start_date__lte=tmp_start_date)) | (
+                        Q(end_date__gte=tmp_end_date) & Q(start_date__lte=tmp_end_date))) & Q(
+                    holiday_type=limit_type_ins.leave_type)
+                #  保存 增减的数据 <limit_edit> <frequency_edit>
+                try:
+                    tmp_limit_ins = Limit.objects.filter(question).get()
+                    tmp_limit_edit = tmp_limit_ins.limit_edit
+                    tmp_frequency_edit = tmp_limit_ins.frequency_edit
+                    tmp_limit_ins.delete()
+                except Limit.DoesNotExist:
+                    tmp_limit_edit = 0
+                    tmp_frequency_edit = 0
+                limit_ins = Limit()
+                limit_ins.emp_ins = emp
+                limit_ins.holiday_type = limit_type_ins.leave_type
+                limit_ins.rate = limit_type_ins.rate
+                limit_ins.start_date = tmp_start_date
+                limit_ins.end_date = tmp_end_date
+                if limit_type_ins.leave_type == annual_leave_ins:
+                    # 年假专属公式
+                    # 使用 round 四舍五入 大于 0.25 看着 0.5
+                    # limit_ins.standard_limit = round((
+                    #     0 if (limit_ins.end_date - limit_ins.start_date).days <0
+                    #         else (limit_ins.end_date - limit_ins.start_date).days / 365 * 3 + 5 *(
+                    #     0 if standard_date.year - emp.enter_date.year < 10
+                    #         else 1)) * 2) / 2
+                    tmp_standard_limit = 0
+                    if standard_date.year - emp.enter_date.year <= 0:
+                        continue
+                    elif standard_date.year - emp.enter_date.year <= 1:
+                        tmp_standard_limit = (emp.enter_date.replace(month=12, day=31) - emp.enter_date).days / 365 * 3
+                    elif standard_date.year - emp.enter_date.year <= 9:
+                        tmp_standard_limit = 3
+                    elif standard_date.year - emp.enter_date.year <= 10:
+                        tmp_standard_limit = (emp.enter_date.replace(month=12,
+                                                                     day=31) - emp.enter_date).days / 365 * 5 + 3
+                    elif standard_date.year - emp.enter_date.year > 10:
+                        tmp_standard_limit = 8
+                    pass
+                    limit_ins.standard_limit = round(tmp_standard_limit * 2) / 2
+                    limit_ins.standard_frequency = int(limit_ins.standard_limit * 2)
+                else:
+                    # 正常额度公式
+                    limit_ins.standard_limit = limit_type_ins.standard_limit
+                    limit_ins.standard_frequency = limit_type_ins.standard_frequency
+                #  计算已使用的额度
+                # limit_ins.used_limit = 0
+                # limit_ins.used_frequency = 0
+                cal_used_limit_total(limit_ins)
+                limit_ins.limit_edit = tmp_limit_edit
+                limit_ins.frequency_edit = tmp_frequency_edit
+                limit_ins.surplus_limit = limit_ins.standard_limit + limit_ins.limit_edit - limit_ins.used_limit
+                limit_ins.surplus_frequency = limit_ins.standard_frequency + limit_ins.frequency_edit - limit_ins.used_frequency
+                # 批量插入, 不会检查结果是否异常
+                # limit_ins.save()
+                limit_ins_list.append(limit_ins)
+                if limit_type_ins.rate == '0':
+                    standard_date = standard_date.replace(year=standard_date.year + 1)
+                else:
+                    standard_date = standard_date + datetime.timedelta(
+                        days=calendar.monthrange(standard_date.year, standard_date.month)[1])
+                pass
+    Limit.objects.bulk_create(limit_ins_list)
+    pass
+
+
+def cal_used_limit_total(limit_ins):
+    """
+    已用额度计算
+    :param limit_ins:
+    :return:
+    """
+    assert isinstance(limit_ins, Limit), "使用错误, 必须是 Limit 对象"
+    leave_detail_info_question = Q(emp=limit_ins.emp_ins) & Q(leave_date__gte=limit_ins.start_date) & Q(
+        leave_date__lte=limit_ins.end_date) & Q(leave_type=limit_ins.holiday_type)
+    limit_ins.used_limit = sum(
+        [leave_info.count_length for leave_info in LeaveDetail.objects.filter(leave_detail_info_question).all()])
+    limit_ins.used_frequency = LeaveDetail.objects.filter(leave_detail_info_question).values(
+        'leave_info_id').distinct().count()
+
+
+#  保存假期时, 更新已用额度信息, 或报错
+def limit_update(emp, start_date, end_date):
+    """
+    额度更新
+    :param emp:
+    :param start_date:
+    :param end_date:
+    :return:
+    """
+    assert isinstance(emp, EmployeeInfo), "emp 不是 EmployeeInfo 对象"
+    assert end_date >= start_date, "开始时间小于等于结束时间"
+    question = Q(emp_ins=emp) & ((Q(start_date__lte=start_date) & Q(end_date__gte=start_date)) | (
+            Q(start_date__lte=end_date) & Q(end_date__gte=end_date)))
+    # print("更新额度")
+    for limit_ins in Limit.objects.filter(question).all():
+        limit_ins_past = limit_ins
+        cal_used_limit_total(limit_ins)
+        # print(limit_ins)
+        if limit_ins_past == limit_ins:
+            continue
+        else:
+            limit_ins.save()
+        pass
+    pass
+
+
+def check_limit_type(leave_info_ins):
+    """
+    检查是否存在假期额度类型, 不存在则报错
+    :param leave_info_ins:
+    :return:
+    """
+    assert isinstance(leave_info_ins, LeaveInfo), "leave_info_ins 不是 LeaveInfo 对象"
+    #  没有此 假期额度类型, 则不做限制,
+    try:
+        LimitStatus.objects.filter(leave_type=leave_info_ins.leave_type).get()
+    except LimitStatus.DoesNotExist:
+        return
+    # 存在此 假期额度类型, 但不存在
+    question_base = Q(emp_ins=leave_info_ins.emp) & Q(holiday_type=leave_info_ins.leave_type)
+    question_start_date = question_base & Q(start_date__lte=leave_info_ins.start_date) & Q(
+        end_date__gte=leave_info_ins.start_date)
+    question_end_date = question_base & Q(start_date__lte=leave_info_ins.end_date) & Q(
+        end_date__gte=leave_info_ins.end_date)
+    try:
+        Limit.objects.filter(question_start_date).get()
+    except Limit.DoesNotExist:
+        raise UserWarning(
+            "{month}区间无 {leave_type} 类型假期额度, 请确定是否拥有此额度后, 计算 {name} 的假期额度".format(
+                leave_type=leave_info_ins.leave_type,
+                name=leave_info_ins.emp, month=leave_info_ins.start_date.strftime('%Y%m')))
+    try:
+        Limit.objects.filter(question_end_date).get()
+    except Limit.DoesNotExist:
+        raise UserWarning(
+            "{month}区间无 {leave_type} 类型假期额度, 请确定是否拥有此额度后, 计算 {name} 的假期额度".format(
+                leave_type=leave_info_ins.leave_type,
+                name=leave_info_ins.emp, month=leave_info_ins.end_date.strftime('%Y%m')))
+    pass
+
+
+def leave_info_equal(old_leave_info_ins, new_leave_info_ins):
+    """
+    检查 leave_info 对象是否相同(数据上)
+    :param old_leave_info_ins:
+    :param new_leave_info_ins:
+    :return:
+    """
+    assert isinstance(old_leave_info_ins, LeaveInfo), "必须为 LeaveInfo 对象"
+    assert isinstance(new_leave_info_ins, LeaveInfo), "必须为 LeaveInfo 对象"
+    object_list = ['emp', 'start_date', 'leave_info_time_start', 'end_date', 'leave_info_time_end', 'leave_type',
+                   'leave_info_status']
+    for attr in object_list:
+        if not getattr(old_leave_info_ins, attr) == getattr(new_leave_info_ins, attr):
+            return False
+    return True
+
+
+def edit_attendance_equal(old_edit_attendance_ins, new_edit_attendance_ins):
+    """
+    检查 edit_attendance 对象是否相同(数据上)
+    :param old_edit_attendance_ins:
+    :param new_edit_attendance_ins:
+    :return:
+    """
+    assert isinstance(old_edit_attendance_ins, EditAttendance), "必须为 EditAttendance 对象"
+    assert isinstance(new_edit_attendance_ins, EditAttendance), "必须为 EditAttendance 对象"
+    object_list = ['emp', 'edit_attendance_date', 'edit_attendance_time_start', 'edit_attendance_time_end',
+                   'edit_attendance_type', 'edit_attendance_status']
+    for attr in object_list:
+        if not getattr(old_edit_attendance_ins, attr) == getattr(new_edit_attendance_ins, attr):
+            return False
+    return True
+
+
+def edit_attendance_ins_built(edit_attendance_ins):
+    """
+    复制一个 EditAttendance 实例对象
+    :param edit_attendance_ins:
+    :return:
+    """
+    object_list = ['id', 'emp', 'edit_attendance_date', 'edit_attendance_time_start', 'edit_attendance_time_end',
+                   'edit_attendance_type', 'edit_attendance_status']
+    tmp_edit_attendance_ins = EditAttendance()
+    for attr in object_list:
+        setattr(tmp_edit_attendance_ins, attr, getattr(edit_attendance_ins, attr))
+    return tmp_edit_attendance_ins

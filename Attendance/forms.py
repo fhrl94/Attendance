@@ -1,7 +1,7 @@
 import sys
 from django import forms
 
-from Attendance.models import EditAttendance, LeaveInfo
+from Attendance.models import EditAttendance, LeaveInfo, LeaveDetail
 
 
 class DateSelectForm(forms.Form):
@@ -72,16 +72,38 @@ class EditAttendanceForm(forms.ModelForm):
 
     def clean(self):
         super(EditAttendanceForm, self).clean()
+        from Attendance.views import edit_attendance_equal
+        from Attendance.views import edit_attendance_distinct
+        #  重复验证
         try:
-            EditAttendance.objects.get(**self.cleaned_data)
-        except EditAttendance.DoesNotExist:
-            try:
-                from Attendance.views import edit_attendance_distinct
+            # self.initial 为空, 说明是新增
+            if not self.initial:
                 edit_attendance_distinct(EditAttendance(**self.cleaned_data))
-            except UserWarning:
-                raise forms.ValidationError('保存失败，原因为：{err}'.format(err=sys.exc_info()[1]))
-            pass
-
+            # 无修改
+            elif edit_attendance_equal(EditAttendance.objects.get(pk=self.initial['id']),
+                                       EditAttendance(pk=self.initial['id'], **self.cleaned_data)) is True:
+                # print("无变化")
+                pass
+            # 有修改
+            elif edit_attendance_equal(EditAttendance.objects.get(pk=self.initial['id']),
+                                       EditAttendance(pk=self.initial['id'], **self.cleaned_data)) is False:
+                from Attendance.views import edit_attendance_ins_built
+                tmp_edit_attendance_ins = edit_attendance_ins_built(EditAttendance.objects.get(pk=self.initial['id']))
+                EditAttendance.objects.get(pk=self.initial['id']).delete()
+                # 是否存在重复记录，有重复则报错
+                try:
+                    edit_attendance_distinct(EditAttendance(**self.cleaned_data))
+                except UserWarning as e:
+                    EditAttendance.objects.bulk_create((tmp_edit_attendance_ins,))
+                    # print(tmp_edit_attendance_ins.__dict__)
+                    raise e
+                    pass
+            else:
+                raise UserWarning("请联系管理员")
+        except UserWarning:
+            self.add_error(field=None, error=forms.ValidationError('保存失败，原因为：{err}'.format(err=sys.exc_info()[1])))
+        except AssertionError:
+            self.add_error(field=None, error=forms.ValidationError('保存失败，原因为：{err}'.format(err=sys.exc_info()[1])))
     pass
 
 
@@ -92,15 +114,42 @@ class LeaveInfoForm(forms.ModelForm):
 
     def clean(self):
         super(LeaveInfoForm, self).clean()
-        # TODO 重复验证
+        if self.cleaned_data['start_date'] > self.cleaned_data['end_date']:
+            self.add_error(field=None, error=forms.ValidationError('保存失败，原因为：开始日期必须要小于等于结束日期'))
+        # 检查额度类型是否存在
+        from Attendance.views import check_limit_type
+        check_limit_type(LeaveInfo(**self.cleaned_data))
+        # 检查 leave_info 对象是否相同(数据上)
+        from Attendance.views import leave_info_equal
+        from Attendance.views import leave_split
+        # print(leave_info_equal(LeaveInfo.objects.get(pk=self.initial['id']), LeaveInfo(pk=self.initial['id'], **self.cleaned_data)))
+        #  重复验证
         try:
-            LeaveInfo.objects.get(**self.cleaned_data)
-        except LeaveInfo.DoesNotExist:
-            try:
-                from Attendance.views import leave_split
+            # self.initial 为空, 说明是新增
+            if not self.initial:
                 leave_split(LeaveInfo(**self.cleaned_data))
-            except UserWarning:
-                raise forms.ValidationError('保存失败，原因为：{err}'.format(err=sys.exc_info()[1]))
-            pass
-
+            # 无修改
+            elif leave_info_equal(LeaveInfo.objects.get(pk=self.initial['id']),
+                                  LeaveInfo(pk=self.initial['id'], **self.cleaned_data)) is True:
+                # print("无变化")
+                pass
+            # 有修改
+            elif leave_info_equal(LeaveInfo.objects.get(pk=self.initial['id']),
+                                  LeaveInfo(pk=self.initial['id'], **self.cleaned_data)) is False:
+                # 删除已修改单据关联的 leave_detail
+                LeaveDetail.objects.filter(leave_info_id=self.initial['id']).all().delete()
+                try:
+                    # 拆分单据，有重复则报错
+                    leave_split(LeaveInfo(**self.cleaned_data))
+                except UserWarning as e:
+                    #  恢复已删除 单据关联的 leave_detail
+                    LeaveDetail.objects.bulk_create(leave_split(LeaveInfo.objects.get(pk=self.initial['id'])))
+                    raise e
+                # print("修改")
+            else:
+                raise UserWarning("请联系管理员")
+        except UserWarning:
+            self.add_error(field=None, error=forms.ValidationError('保存失败，原因为：{err}'.format(err=sys.exc_info()[1])))
+        except AssertionError:
+            self.add_error(field=None, error=forms.ValidationError('保存失败，原因为：{err}'.format(err=sys.exc_info()[1])))
     pass
