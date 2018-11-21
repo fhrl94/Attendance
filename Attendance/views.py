@@ -1136,10 +1136,9 @@ def limit_update(emp, start_date, end_date):
             Q(start_date__lte=end_date) & Q(end_date__gte=end_date)))
     # print("更新额度")
     for limit_ins in Limit.objects.filter(question).all():
-        limit_ins_past = limit_ins
         cal_used_limit_total(limit_ins)
         # print(limit_ins)
-        if limit_ins_past == limit_ins:
+        if limit_equal(Limit.objects.get(pk=limit_ins.pk), limit_ins):
             continue
         else:
             limit_ins.save()
@@ -1228,3 +1227,13 @@ def edit_attendance_ins_built(edit_attendance_ins):
     for attr in object_list:
         setattr(tmp_edit_attendance_ins, attr, getattr(edit_attendance_ins, attr))
     return tmp_edit_attendance_ins
+
+def limit_equal(old_limit_ins, new_limit_ins):
+    assert isinstance(old_limit_ins, Limit), "必须为 Limit 对象"
+    assert isinstance(new_limit_ins, Limit), "必须为 Limit 对象"
+    object_list = ['emp_ins', 'holiday_type', 'rate', 'start_date', 'end_date', 'standard_limit', 'standard_frequency',
+                   'used_limit', 'used_frequency', 'limit_edit', 'frequency_edit', 'surplus_limit', 'surplus_frequency']
+    for attr in object_list:
+        if not getattr(old_limit_ins, attr) == getattr(new_limit_ins, attr):
+            return False
+    return True
