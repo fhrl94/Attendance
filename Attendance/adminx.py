@@ -11,7 +11,8 @@ from Attendance.models import EmployeeInfo, OriginalCard, ShiftsInfo, EmployeeSc
     EditAttendance, LeaveType, LeaveInfo, AttendanceExceptionStatus, AttendanceInfo, OriginalCardImport, LegalHoliday, \
     AttendanceTotal, Limit, LevelStatus, LimitStatus, LeaveDetail
 from Attendance.resources import EmployeeInfoResource, OriginalCardResource, EditAttendanceTypeResource, \
-    LeaveTypeResource, EditAttendanceResource, LeaveInfoResource, LevelStatusResource, LimitStatusResource
+    LeaveTypeResource, EditAttendanceResource, LeaveInfoResource, LevelStatusResource, LimitStatusResource, \
+    LimitResource
 from Attendance.views import get_path, ShareContext, attendance_total_cal, form_select, attendance_cal, shift_swap, \
     cal_scheduling_info, original_card_import, cal_limit, leave_split_cal
 
@@ -312,6 +313,7 @@ class LimitStatusAdmin(object):
 
 @xadmin.sites.register(Limit)
 class LimitAdmin(object):
+    import_export_args = {'import_resource_class': LimitResource, }
     list_display = (
     'emp_ins', 'enterdate', 'holiday_type', 'rate', 'start_date', 'end_date', 'standard_limit', 'standard_frequency',
     'used_limit', 'used_frequency', 'limit_edit', 'frequency_edit', 'surplus_limit', 'surplus_frequency',)
