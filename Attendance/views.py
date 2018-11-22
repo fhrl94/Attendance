@@ -411,9 +411,8 @@ def get_leave_detail_dict(emp_one, start_date, end_date):
     assert end_date >= start_date, "开始时间小于等于结束时间"
     # 对 假期的 开始日期小于考勤计算的结束日期 或 假期的 结束日期大于考勤计算的起始日期
     # 此次不需要判断是否生效
-    # TODO 测试是否影响 考勤数据
-    question = Q(emp=emp_one.code) & ((Q(end_date__gte=start_date) & Q(start_date__lte=start_date)) | (
-                Q(end_date__gte=end_date) & Q(start_date__lte=end_date)))
+    #  测试是否影响 考勤数据
+    question = Q(emp=emp_one.code) & Q(start_date__lte=end_date) & Q(end_date__gte=start_date)
     leave_info_list = LeaveInfo.objects.filter(question)
     if len(leave_info_list):
         leave_split_cal(leave_info_list)
@@ -919,17 +918,12 @@ def user_logout(request):
 def ajax_dict(request):
     date_list = []
     models_dict = {'attendance_detail': AttendanceInfo, 'attendance_summary': AttendanceTotal,
-                   'edit_attendance': EditAttendance, 'leave_info': LeaveInfo, }
+                   'edit_attendance': EditAttendance, 'leave_info': LeaveInfo, 'limit': Limit}
     login_user = getattr(request, 'user', None)
     user_emp = EmployeeInfo.objects.filter(user_ptr_id=login_user.id).get()
     # print(request.POST.get("start_date"), request.POST.get("end_date"))
     start_date = request.POST.get("start_date")
     end_date = request.POST.get("end_date")
-    try:
-        # 控制员工能计算的范围
-        user_cal(user_emp, start_date, end_date)
-    except ValueError:
-        return JsonResponse([{'err': '没有填写日期'}, ], safe=False)
     attendance_detail_questions = Q(attendance_date__gte=start_date) & Q(attendance_date__lte=end_date) & Q(
         emp=user_emp)
     attendance_summary_questions = Q(
@@ -937,12 +931,26 @@ def ajax_dict(request):
         section_date__lte=datetime.datetime.strptime(end_date, '%Y-%m-%d').strftime('%Y%m')) & Q(emp_name=user_emp)
     edit_attendance_questions = Q(edit_attendance_date__gte=start_date) & Q(edit_attendance_date__lte=end_date) & Q(
         emp=user_emp)
-    leave_info_questions = Q(end_date__gte=start_date) & Q(start_date__lte=end_date) & Q(emp=user_emp)
+    leave_info_questions = Q(emp=user_emp) & Q(end_date__gte=start_date) & Q(start_date__lte=end_date)
+    # 时间段判断原理是一致的
+    # leave_info_questions = Q(emp=user_emp) & ((Q(start_date__lte=end_date) & Q(start_date__gte=start_date)) | (Q(
+    #     end_date__lte=end_date) & Q(end_date__gte=start_date)))
+    limit_questions = Q(emp_ins=user_emp) & Q(end_date__gte=start_date) & Q(start_date__lte=end_date)
     query_key = {'attendance_detail': attendance_detail_questions, 'attendance_summary': attendance_summary_questions,
-                 'edit_attendance': edit_attendance_questions, 'leave_info': leave_info_questions, }
+                 'edit_attendance': edit_attendance_questions, 'leave_info': leave_info_questions,
+                 'limit': limit_questions,}
     order_key = {'attendance_detail': 'attendance_date', 'attendance_summary': 'section_date',
-                 'edit_attendance': 'edit_attendance_date', 'leave_info': 'start_date', }
+                 'edit_attendance': 'edit_attendance_date', 'leave_info': 'start_date', 'limit': 'start_date'}
     if models_dict.get(request.POST.get("title_type")):
+        if request.POST.get("title_type") in ('attendance_detail', 'attendance_summary'):
+            try:
+                # 控制员工能计算的范围
+                user_cal(user_emp, start_date, end_date)
+                pass
+            except ValueError:
+                return JsonResponse([{'err': '没有填写日期'}, ], safe=False)
+        if request.POST.get("title_type") in ('leave_info', 'limit'):
+            limit_update(emp=user_emp, start_date=start_date, end_date=end_date)
         attendance_list = models_dict[request.POST.get("title_type")].objects.filter(
             query_key[request.POST.get("title_type")]).order_by(order_key[request.POST.get("title_type")]).values()
     else:
@@ -1040,8 +1048,7 @@ def cal_limit(queryset, start_date, end_date):
             if tmp_start_date > tmp_end_date:
                 continue
             while standard_date <= end_date:
-                question = Q(emp_ins=emp) & ((Q(end_date__gte=tmp_start_date) & Q(start_date__lte=tmp_start_date)) | (
-                        Q(end_date__gte=tmp_end_date) & Q(start_date__lte=tmp_end_date))) & Q(
+                question = Q(emp_ins=emp) & Q(end_date__gte=tmp_start_date) & Q(start_date__lte=tmp_end_date) & Q(
                     holiday_type=limit_type_ins.leave_type)
                 #  保存 增减的数据 <limit_edit> <frequency_edit>
                 try:
@@ -1132,8 +1139,7 @@ def limit_update(emp, start_date, end_date):
     """
     assert isinstance(emp, EmployeeInfo), "emp 不是 EmployeeInfo 对象"
     assert end_date >= start_date, "开始时间小于等于结束时间"
-    question = Q(emp_ins=emp) & ((Q(start_date__lte=start_date) & Q(end_date__gte=start_date)) | (
-            Q(start_date__lte=end_date) & Q(end_date__gte=end_date)))
+    question = Q(emp_ins=emp) & Q(start_date__lte=end_date) & Q(end_date__gte=start_date)
     # print("更新额度")
     for limit_ins in Limit.objects.filter(question).all():
         cal_used_limit_total(limit_ins)
@@ -1160,6 +1166,7 @@ def check_limit_type(leave_info_ins):
         return
     # 存在此 假期额度类型, 但不存在
     question_base = Q(emp_ins=leave_info_ins.emp) & Q(holiday_type=leave_info_ins.leave_type)
+    # 不检查中间月份, 原因是只有周期为年的, 才存在跨多月, 一般都是隔月
     question_start_date = question_base & Q(start_date__lte=leave_info_ins.start_date) & Q(
         end_date__gte=leave_info_ins.start_date)
     question_end_date = question_base & Q(start_date__lte=leave_info_ins.end_date) & Q(
@@ -1229,6 +1236,12 @@ def edit_attendance_ins_built(edit_attendance_ins):
     return tmp_edit_attendance_ins
 
 def limit_equal(old_limit_ins, new_limit_ins):
+    """
+    检查 limit 对象是否相同(数据上)
+    :param old_limit_ins:
+    :param new_limit_ins:
+    :return:
+    """
     assert isinstance(old_limit_ins, Limit), "必须为 Limit 对象"
     assert isinstance(new_limit_ins, Limit), "必须为 Limit 对象"
     object_list = ['emp_ins', 'holiday_type', 'rate', 'start_date', 'end_date', 'standard_limit', 'standard_frequency',

@@ -98,8 +98,8 @@ $(document).ready(function(){
     });
 
     $('#annual_leave_credits').click(function () {
-       $('#criteria_title').text("年假额度查询");
-       title_type = 'annual_leave_credits';
+       $('#criteria_title').text("假期额度查询");
+       title_type = 'limit';
        query_init_once()
     });
 
@@ -195,9 +195,14 @@ $(document).ready(function(){
         'leave_info_time_start':'开始请假时间',
         'end_date': '结束日期', 'leave_info_time_end': '结束请假时间', 'leave_type_id': '假期类型',
         'leave_info_status': '假期单据状态', 'leave_info_operate': '假期操作日期'};
+    var limit_title_dict = {'emp_ins_id': '工号', 'holiday_type_id': '假期类型', 'rate': '周期', 'start_date': '开始日期',
+        'end_date': '结束日期', 'standard_limit': '标准额度', 'standard_frequency': '标准次数', 'used_limit': '已用额度',
+        'used_frequency': '已用次数', 'limit_edit': '额度增减', 'frequency_edit': '次数增减', 'surplus_limit': '剩余额度',
+        'surplus_frequency': '剩余次数'
+    };
     var content_dict = {'attendance_detail': attendance_detail_title_dict,
         'attendance_summary': attendance_summary_title_dict, 'edit_attendance': edit_attendance_title_dict,
-        'leave_info': leave_info_title_dict};
+        'leave_info': leave_info_title_dict, 'limit':limit_title_dict};
 
     // 翻译数据
     function translate_data() {
@@ -242,7 +247,7 @@ $(document).ready(function(){
                 }
             });
         // 请假、签卡单据原因
-        $(".leave_type_id, .edit_attendance_type_id").each(function(){
+        $(".leave_type_id, .edit_attendance_type_id, .holiday_type_id").each(function(){
                 switch ($(this).text()){
                     // case '1': $(this).text('打卡');break;
                     case '2': $(this).text('见客户');break;
@@ -285,5 +290,14 @@ $(document).ready(function(){
                         $(this).prev().text("")
                 }
             });
+        // 周期
+        $(".rate").each(function () {
+            switch ($(this).text()) {
+                case '0': $(this).text('年');break;
+                case '1': $(this).text('月');break;
+                default:
+                        $(this).text('');
+            }
+        })
     }
 });
