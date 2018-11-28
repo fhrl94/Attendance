@@ -1,6 +1,7 @@
 import datetime
 import sys
 
+from ckeditor_uploader.fields import RichTextUploadingField
 from django.contrib.auth.models import User
 from django.core.validators import RegexValidator
 from django.db import models
@@ -516,3 +517,16 @@ class Limit(models.Model):
         verbose_name_plural = verbose_name
 
     pass
+
+
+class HelpContext(models.Model):
+    title = models.CharField(verbose_name='标题', max_length=100, )
+    edit_operate = models.DateTimeField('更新操作日期', auto_now=True)
+    content = RichTextUploadingField('')
+
+    def __str__(self):
+        return str(self.title)
+
+    class Meta:
+        verbose_name = '帮助文档'
+        verbose_name_plural = verbose_name

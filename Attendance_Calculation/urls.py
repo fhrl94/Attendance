@@ -15,10 +15,15 @@ Including another URLconf
 """
 import xadmin
 from django.conf.urls import url, include
+from django.conf.urls.static import static
 from django.contrib import admin
 
+from Attendance_Calculation import settings
+
 urlpatterns = [
+    url(r'^ckeditor/', include('ckeditor_uploader.urls')),
     url(r'^Attendance/', include('Attendance.urls')),
     url(r'^xadmin/', include(xadmin.site.urls)),
     url(r'^admin/', admin.site.urls),
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+#  获取多媒体地址

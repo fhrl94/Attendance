@@ -4,7 +4,7 @@
         欢迎
         &nbsp; <h4 class="glyphicon glyphicon-user" style="display: inline">{{user_emp.name}}</h4>&nbsp;
         登录！查看到考勤异常及时处理哟~</div>
-    <div class="panel panel-primary">
+    <div class="panel panel-primary" id="panel-primary">
         <div class="panel-heading">
             <h3 class="panel-title" id="criteria_title">
                 考勤异常查询
@@ -40,6 +40,7 @@
             </table>
         </div>
     </div>
+    <div id="help_context_ajax"></div>
 {% endblock %}
 {% block bootstrap3_extra_script %}
     <script type="text/javascript" src="/static/jQuery/home.js">

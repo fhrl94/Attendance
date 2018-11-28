@@ -9,7 +9,7 @@ from xadmin.views import CommAdminView, BaseAdminPlugin
 from Attendance.forms import DateSelectForm, ShiftsInfoDateForm, EditAttendanceForm, LeaveInfoForm
 from Attendance.models import EmployeeInfo, OriginalCard, ShiftsInfo, EmployeeSchedulingInfo, EditAttendanceType, \
     EditAttendance, LeaveType, LeaveInfo, AttendanceExceptionStatus, AttendanceInfo, OriginalCardImport, LegalHoliday, \
-    AttendanceTotal, Limit, LevelStatus, LimitStatus, LeaveDetail
+    AttendanceTotal, Limit, LevelStatus, LimitStatus, LeaveDetail, HelpContext
 from Attendance.resources import EmployeeInfoResource, OriginalCardResource, EditAttendanceTypeResource, \
     LeaveTypeResource, EditAttendanceResource, LeaveInfoResource, LevelStatusResource, LimitStatusResource, \
     LimitResource
@@ -150,9 +150,8 @@ class EmployeeInfoAdmin(object):
     search_fields = ('name', 'code',)
     actions = [SelectedShiftsInfoAction, ShiftSelectAction, CalAttendanceLimitAction, CalAttendanceAction,
                CalAttendanceTotalAction, ]
-    exclude = (
-    'first_name', 'last_name', 'email', 'is_staff', 'date_joined', 'last_login', 'is_active', 'is_superuser', 'groups',
-    'user_permissions')
+    exclude = ('first_name', 'last_name', 'email', 'is_staff', 'date_joined', 'last_login', 'is_active',
+               'is_superuser', 'groups', 'user_permissions')
     pass
 
 
@@ -314,9 +313,9 @@ class LimitStatusAdmin(object):
 @xadmin.sites.register(Limit)
 class LimitAdmin(object):
     import_export_args = {'import_resource_class': LimitResource, }
-    list_display = (
-    'emp_ins', 'enterdate', 'holiday_type', 'rate', 'start_date', 'end_date', 'standard_limit', 'standard_frequency',
-    'used_limit', 'used_frequency', 'limit_edit', 'frequency_edit', 'surplus_limit', 'surplus_frequency',)
+    list_display = ('emp_ins', 'enterdate', 'holiday_type', 'rate', 'start_date', 'end_date', 'standard_limit',
+                    'standard_frequency', 'used_limit', 'used_frequency', 'limit_edit', 'frequency_edit',
+                    'surplus_limit', 'surplus_frequency',)
     readonly_fields = (
         'emp_ins', 'holiday_type', 'rate', 'start_date', 'end_date', 'standard_limit', 'standard_frequency',
         'used_limit', 'used_frequency', 'surplus_limit', 'surplus_frequency',)
@@ -326,6 +325,9 @@ class LimitAdmin(object):
     search_fields = ('emp_ins__code', 'emp_ins__name')
     # ordering = ('emp_ins__code', 'holiday_type')
 
+
+@xadmin.sites.register(HelpContext)
+class HelpContextAdmin(object):
     pass
 
 

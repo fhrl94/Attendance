@@ -13,7 +13,7 @@ from django.urls import reverse
 from Attendance.forms import UserForm, ChangePwdForm
 from Attendance.models import OriginalCardImport, EmployeeInfo, EmployeeSchedulingInfo, ShiftsInfo, LegalHoliday, \
     AttendanceInfo, OriginalCard, AttendanceExceptionStatus, EditAttendance, LeaveInfo, LeaveDetail, AttendanceTotal, \
-    Limit, LeaveType, LimitStatus
+    Limit, LeaveType, LimitStatus, HelpContext
 
 
 # TODO 返回友好型页面，而不是报错
@@ -916,9 +916,9 @@ def user_logout(request):
 # 数据查询（基于ajax）
 @login_required(login_url="login")
 def ajax_dict(request):
-    date_list = []
     models_dict = {'attendance_detail': AttendanceInfo, 'attendance_summary': AttendanceTotal,
-                   'edit_attendance': EditAttendance, 'leave_info': LeaveInfo, 'limit': Limit}
+                   'edit_attendance': EditAttendance, 'leave_info': LeaveInfo, 'limit': Limit,
+                   'help_context': HelpContext}
     login_user = getattr(request, 'user', None)
     user_emp = EmployeeInfo.objects.filter(user_ptr_id=login_user.id).get()
     # print(request.POST.get("start_date"), request.POST.get("end_date"))
@@ -936,28 +936,23 @@ def ajax_dict(request):
     # leave_info_questions = Q(emp=user_emp) & ((Q(start_date__lte=end_date) & Q(start_date__gte=start_date)) | (Q(
     #     end_date__lte=end_date) & Q(end_date__gte=start_date)))
     limit_questions = Q(emp_ins=user_emp) & Q(end_date__gte=start_date) & Q(start_date__lte=end_date)
+    help_context_questions = Q()
     query_key = {'attendance_detail': attendance_detail_questions, 'attendance_summary': attendance_summary_questions,
                  'edit_attendance': edit_attendance_questions, 'leave_info': leave_info_questions,
-                 'limit': limit_questions,}
+                 'limit': limit_questions, 'help_context': help_context_questions}
     order_key = {'attendance_detail': 'attendance_date', 'attendance_summary': 'section_date',
-                 'edit_attendance': 'edit_attendance_date', 'leave_info': 'start_date', 'limit': 'start_date'}
+                 'edit_attendance': 'edit_attendance_date', 'leave_info': 'start_date', 'limit': 'start_date',
+                 'help_context': 'edit_operate'}
     if models_dict.get(request.POST.get("title_type")):
         if request.POST.get("title_type") in ('attendance_detail', 'attendance_summary'):
-            try:
-                # 控制员工能计算的范围
-                user_cal(user_emp, start_date, end_date)
-                pass
-            except ValueError:
-                return JsonResponse([{'err': '没有填写日期'}, ], safe=False)
+            user_cal(user_emp, start_date, end_date)
         if request.POST.get("title_type") in ('leave_info', 'limit'):
             limit_update(emp=user_emp, start_date=start_date, end_date=end_date)
         attendance_list = models_dict[request.POST.get("title_type")].objects.filter(
             query_key[request.POST.get("title_type")]).order_by(order_key[request.POST.get("title_type")]).values()
     else:
         return JsonResponse([{'err': '待开发'}, ], safe=False)
-    for one in attendance_list:
-        date_list.append(one)
-        pass
+    date_list = [one for one in attendance_list]
     return JsonResponse(date_list, safe=False)
 
 
@@ -1235,6 +1230,7 @@ def edit_attendance_ins_built(edit_attendance_ins):
         setattr(tmp_edit_attendance_ins, attr, getattr(edit_attendance_ins, attr))
     return tmp_edit_attendance_ins
 
+
 def limit_equal(old_limit_ins, new_limit_ins):
     """
     检查 limit 对象是否相同(数据上)
@@ -1250,3 +1246,10 @@ def limit_equal(old_limit_ins, new_limit_ins):
         if not getattr(old_limit_ins, attr) == getattr(new_limit_ins, attr):
             return False
     return True
+
+
+def help_context(request, ID):
+    get_help_context = HelpContext.objects.filter(pk=ID).get()
+    return JsonResponse(get_help_context.content, safe=False)
+    # return render(request, template_name='Attendance/help_context.html', context={'content': help_context, })
+    pass

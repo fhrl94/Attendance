@@ -103,9 +103,9 @@ $(document).ready(function(){
        query_init_once()
     });
 
-    $('#help_text').click(function () {
+    $('#help_context').click(function () {
        $('#criteria_title').text("常见问题说明");
-       title_type = 'help_text';
+       title_type = 'help_context';
        query_init_once()
     });
 
@@ -113,6 +113,25 @@ $(document).ready(function(){
     $("#query_attendance").click(function(){
         var start_date = $("#start_date").val();
         var end_date = $("#end_date").val();
+        if (start_date == "" || start_date == null) {
+            alert("请选择开始日期！");
+            return false;
+        }
+        if (end_date == "" || end_date == null) {
+            alert("请选择结束日期！");
+            return false;
+        }
+        var start_num = parseInt(start_date.replace(/-/g, ''), 10);
+        var end_num = parseInt(end_date.replace(/-/g, ''), 10);
+        if (start_num > end_num) {
+            alert("结束日期不能在开始日期之前！");
+            return false;
+        }
+        var today = new Date();
+        if (end_num > parseInt(today.toISOString().substr(0, 10).replace(/-/g, ''), 10)) {
+            alert("结束日期不能大于今天！");
+            return false;
+        }
         var html_obj=$.ajax({url:"/Attendance/ajax_dict/",type: "POST",dataType:"json",
                 data:{"start_date":start_date,"end_date":end_date, 'title_type':title_type}, async:false});
         var date_dict_list = JSON.parse( html_obj.responseText );
@@ -155,15 +174,34 @@ $(document).ready(function(){
                 $('#content_filter_label').removeClass("hidden");
                 $('#tips_attendance_detail').removeClass("hidden");
                 $('#tips_attendance_summary').addClass("hidden");
+                $('#query_attendance_form').removeClass("hidden");
+                $('#help_context_ajax').addClass("hidden");
+                $('#panel-primary').removeClass("hidden");
                 break;
             case 'attendance_summary':
                 $('#tips_attendance_summary').removeClass("hidden");
                 $('#tips_attendance_detail').addClass("hidden");
-                $('#content_filter_label').addClass("hidden");break;
+                $('#content_filter_label').addClass("hidden");
+                $('#query_attendance_form').removeClass("hidden");
+                $('#help_context_ajax').addClass("hidden");
+                $('#panel-primary').removeClass("hidden");
+                break;
+            case  'help_context':
+                $('#query_attendance_form').addClass("hidden");
+                $('#tips_attendance_detail').addClass("hidden");
+                $('#tips_attendance_summary').addClass("hidden");
+                $('#content_filter_label').addClass("hidden");
+                $('#help_context_ajax').text('');
+                $('#help_context_ajax').removeClass("hidden");
+                $('#panel-primary').removeClass("hidden");
+                break;
             default:
                 $('#content_filter_label').addClass("hidden");
                 $('#tips_attendance_detail').addClass("hidden");
                 $('#tips_attendance_summary').addClass("hidden");
+                $('#query_attendance_form').removeClass("hidden");
+                $('#help_context_ajax').addClass("hidden");
+                $('#panel-primary').removeClass("hidden");
         }
         translate_data();
         filter_attendance_info();
@@ -171,7 +209,8 @@ $(document).ready(function(){
 
     // 初始化
     $(function () {
-        $('#attendance_detail').click();
+        // $('#attendance_detail').click();
+        $('#help_context').click();
     });
 
     // 变量申明
@@ -198,11 +237,11 @@ $(document).ready(function(){
     var limit_title_dict = {'emp_ins_id': '工号', 'holiday_type_id': '假期类型', 'rate': '周期', 'start_date': '开始日期',
         'end_date': '结束日期', 'standard_limit': '标准额度', 'standard_frequency': '标准次数', 'used_limit': '已用额度',
         'used_frequency': '已用次数', 'limit_edit': '额度增减', 'frequency_edit': '次数增减', 'surplus_limit': '剩余额度',
-        'surplus_frequency': '剩余次数'
-    };
+        'surplus_frequency': '剩余次数'};
+    var help_context_dict = {'id':'编号', 'title': '标题', 'edit_operate': '编辑时间'};
     var content_dict = {'attendance_detail': attendance_detail_title_dict,
         'attendance_summary': attendance_summary_title_dict, 'edit_attendance': edit_attendance_title_dict,
-        'leave_info': leave_info_title_dict, 'limit':limit_title_dict};
+        'leave_info': leave_info_title_dict, 'limit':limit_title_dict, 'help_context':help_context_dict};
 
     // 翻译数据
     function translate_data() {
@@ -298,6 +337,18 @@ $(document).ready(function(){
                 default:
                         $(this).text('');
             }
+        });
+        // 添加链接
+        $(".title").each(function () {
+            // $(this).wrapInner('<a href=' + '/Attendance/help_context/id=' + $(this).prev().text() + '><a/>');
+            $(this).wrapInner('<a href="#help_context_ajax" class="query"><a/>');
+            $(this).on("click",function(){
+                var html_obj=$.ajax({url:'/Attendance/help_context/id=' + $(this).prev().text(), type: "GET",dataType:"json",
+                    data:{}, async:false});
+                var help_context_ajax = JSON.parse( html_obj.responseText );
+                $('#help_context_ajax').html(help_context_ajax);
+                $('#panel-primary').addClass("hidden");
+            });
         })
     }
 });
