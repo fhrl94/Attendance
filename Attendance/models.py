@@ -10,6 +10,8 @@ from django.db.models import Sum
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 
+from Attendance_Calculation.settings import ATTENDANCE_UPLOAD_PATH
+
 status_choice = (('0', '未使用'), ('1', '使用中'), ('2', '已失效'))
 user_status_choice = (('0', '未审核'), ('1', '已审核'), ('2', '已失效'))
 
@@ -18,7 +20,8 @@ user_status_choice = (('0', '未审核'), ('1', '已审核'), ('2', '已失效')
 
 def user_directory_path(instance, filename):
     # file will be uploaded to MEDIA_ROOT/user_<id>/<filename>
-    return '{upload_to}/{filename}_{time}'.format(upload_to=sys.path[0] + '/upload/', filename=filename,
+    # TODO 限制上传的文件进行访问
+    return '{upload_to}/{filename}_{time}'.format(upload_to=ATTENDANCE_UPLOAD_PATH, filename=filename,
                                                   time=datetime.datetime.today().strftime('%Y_%m_%d_%H_%M_%S'))
 
 

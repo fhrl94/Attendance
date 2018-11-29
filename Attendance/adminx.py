@@ -1,3 +1,5 @@
+import os
+
 import xadmin
 from django.shortcuts import redirect
 from django.template import loader
@@ -15,6 +17,7 @@ from Attendance.resources import EmployeeInfoResource, OriginalCardResource, Edi
     LimitResource
 from Attendance.views import get_path, ShareContext, attendance_total_cal, form_select, attendance_cal, shift_swap, \
     cal_scheduling_info, original_card_import, cal_limit, leave_split_cal
+from Attendance_Calculation.settings import MEDIA_ROOT
 
 
 class SelectedShiftsInfoAction(BaseActionView):
@@ -173,7 +176,7 @@ class OriginalCardImportAdmin(object):
     list_display = ('id', 'path_name', 'upload_time',)
 
     def upload_loading(self, request, queryset):
-        path = get_path(queryset)
+        path = os.path.join(MEDIA_ROOT, get_path(queryset))
         name_list = original_card_import(path)
         if len(name_list):
             self.message_user("{num}人的考勤没有导入成功,分别是{name}".format(num=len(name_list), name='、'.join(
