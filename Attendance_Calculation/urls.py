@@ -15,15 +15,16 @@ Including another URLconf
 """
 import xadmin
 from django.conf.urls import url, include
-from django.conf.urls.static import static
 from django.contrib import admin
+from django.views.static import serve
 
-from Attendance_Calculation import settings
+from Attendance_Calculation.settings import CKEDITOR_UPLOAD_PATH
 
 urlpatterns = [
     url(r'^ckeditor/', include('ckeditor_uploader.urls')),
     url(r'^Attendance/', include('Attendance.urls')),
     url(r'^xadmin/', include(xadmin.site.urls)),
     url(r'^admin/', admin.site.urls),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    url(r'^{media_path}(?P<path>.*)'.format(media_path=CKEDITOR_UPLOAD_PATH), serve)
+]
 #  获取多媒体地址
