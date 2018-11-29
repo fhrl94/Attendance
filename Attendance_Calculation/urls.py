@@ -13,18 +13,20 @@ Including another URLconf
     1. Import the include() function: from django.conf.urls import url, include
     2. Add a URL to urlpatterns:  url(r'^blog/', include('blog.urls'))
 """
+import os
+
 import xadmin
 from django.conf.urls import url, include
 from django.contrib import admin
 from django.views.static import serve
 
-from Attendance_Calculation.settings import CKEDITOR_UPLOAD_PATH
+from Attendance_Calculation import settings
 
 urlpatterns = [
     url(r'^ckeditor/', include('ckeditor_uploader.urls')),
     url(r'^Attendance/', include('Attendance.urls')),
     url(r'^xadmin/', include(xadmin.site.urls)),
     url(r'^admin/', admin.site.urls),
-    url(r'^{media_path}(?P<path>.*)'.format(media_path=CKEDITOR_UPLOAD_PATH), serve)
+    #  获取富文本编辑的多媒体地址
+    url(r'^media/uploads/(?P<path>.*)$', serve, kwargs={'document_root': settings.MEDIA_ROOT + os.sep+ settings.CKEDITOR_UPLOAD_PATH})
 ]
-#  获取多媒体地址
