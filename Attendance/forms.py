@@ -94,10 +94,10 @@ class EditAttendanceForm(forms.ModelForm):
                 try:
                     edit_attendance_distinct(EditAttendance(**self.cleaned_data))
                 except UserWarning as e:
-                    EditAttendance.objects.bulk_create((tmp_edit_attendance_ins,))
-                    # print(tmp_edit_attendance_ins.__dict__)
                     raise e
-                    pass
+                finally:
+                    # 还原删除的单据
+                    EditAttendance.objects.bulk_create((tmp_edit_attendance_ins,))
             else:
                 raise UserWarning("请联系管理员")
         except UserWarning:
@@ -142,7 +142,7 @@ class LeaveInfoForm(forms.ModelForm):
                     # 拆分单据，有重复则报错
                     leave_split(LeaveInfo(**self.cleaned_data))
                 except UserWarning as e:
-                    #  恢复已删除 单据关联的 leave_detail
+                    #  恢复已删除 单据关联的 leave_detail (因保存时, 会自动生成,故可以不用生成)
                     LeaveDetail.objects.bulk_create(leave_split(LeaveInfo.objects.get(pk=self.initial['id'])))
                     raise e
                 # print("修改")

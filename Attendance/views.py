@@ -1224,7 +1224,7 @@ def edit_attendance_ins_built(edit_attendance_ins):
     :return:
     """
     object_list = ['id', 'emp', 'edit_attendance_date', 'edit_attendance_time_start', 'edit_attendance_time_end',
-                   'edit_attendance_type', 'edit_attendance_status']
+                   'edit_attendance_type', 'edit_attendance_status', 'edit_attendance_operate']
     tmp_edit_attendance_ins = EditAttendance()
     for attr in object_list:
         setattr(tmp_edit_attendance_ins, attr, getattr(edit_attendance_ins, attr))

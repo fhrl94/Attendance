@@ -230,10 +230,10 @@ class EditAttendance(models.Model):
             try:
                 edit_attendance_distinct(self)
             except UserWarning as e:
-                EditAttendance.objects.bulk_create((tmp_edit_attendance_ins,))
-                # 还原删除的单据
                 raise e
-                pass
+            finally:
+                # 还原删除的单据
+                EditAttendance.objects.bulk_create((tmp_edit_attendance_ins,))
         else:
             raise UserWarning("请联系管理员")
         super(EditAttendance, self).save(*args, **kwargs)  # Call the "real" save() method.
