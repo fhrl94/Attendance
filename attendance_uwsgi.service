@@ -1,0 +1,44 @@
+# 部署环境为 centos 7
+
+# 需要软连接到 /etc/systemd/system/ 目录下
+# ln -s /root/Attendance/attendance_uwsgi.service /etc/systemd/system/attendance_uwsgi.service
+
+# 开机自启动
+# systemctl enable attendance_uwsgi.service
+
+# 启动/重启/停止/查看服务
+# systemctl start attendance_uwsgi.service
+# systemctl restart attendance_uwsgi.service
+# systemctl stop attendance_uwsgi.service
+# systemctl status attendance_uwsgi.service
+
+# 删除软链接命令
+# rm /etc/systemd/system/attendance_uwsgi.service
+
+# uwsgi3 必须要存在, 因为使用的是 Python3.6 版本, 所以需要 uWSGI3 , 可以去官网下载
+# ExecStart=/usr/bin/uwsgi3
+
+# 日志存在路径
+# --logto /root/Attendance/log/Attendance.log --log-maxsize 1024000
+
+# 通过配置文件<Attendance_uwsgi.ini>启动, 必须存在
+# --ini /root/Attendance/Attendance_uwsgi.ini
+
+# 参数配置参考 http://blog.51cto.com/littledevil/1912570
+# 可以百度 <centos7 service 配置>
+
+[Unit]
+Description=uWSGI Emperor
+Before=nginx.service
+After=syslog.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/uwsgi3 --logto /root/Attendance/log/Attendance.log --log-maxsize 1024000  --ini /root/Attendance/Attendance_uwsgi.ini
+Restart=always
+KillSignal=SIGQUIT
+StandardError=syslog
+NotifyAccess=all
+
+[Install]
+WantedBy=multi-user.target
