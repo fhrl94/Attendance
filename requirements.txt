@@ -1,6 +1,6 @@
 xadmin
 xlrd
-django == 1.11.15
+django == 1.11.18
 django-bootstrap3
 django-ckeditor
 pillow
